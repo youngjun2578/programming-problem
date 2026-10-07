@@ -17,6 +17,7 @@ import { MISTAKES } from '../../server/engine/mistakes.js';
 import { AREAS } from '../../server/areas.js';
 import { TEMPLATES } from '../../server/registry.js';
 import { generateQuestions } from '../../server/diagnosis.js';
+import { SITE_NAME } from '../../shared/site.js';
 
 export const CONTENT_DIR = 'content/guides';
 /** 생성 HTML을 두는 곳(프로젝트 루트 기준). .gitignore에 있음 */
@@ -25,7 +26,7 @@ export const OUT_DIR = 'guide';
 /** 가이드 분류: 영역 이름(server/areas.ts) + 종합 */
 const AREA_NAMES: readonly string[] = [...AREAS.map((a) => a.name), '종합'];
 const CIRC = '①②③④⑤';
-const SITE = 'NCS 수리능력 진단';
+const SITE = SITE_NAME;
 
 export interface Guide {
   slug: string;
@@ -215,8 +216,7 @@ ${o.noindex ? '<meta name="robots" content="noindex">' : `<link rel="canonical" 
 <meta property="og:title" content="${esc(o.title)}">
 <meta property="og:description" content="${esc(o.description)}">
 <meta property="og:url" content="%VITE_SITE_URL%${o.path}">
-<meta property="og:image" content="%VITE_SITE_URL%/og.png">
-<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:card" content="summary">
 <link rel="stylesheet" href="/src/styles/main.css">
 <link rel="stylesheet" href="/src/styles/guide.css">
 ${o.jsonld.map((j) => `<script type="application/ld+json">\n${JSON.stringify(j).replace(/</g, '\\u003c')}\n</script>`).join('\n')}
@@ -249,7 +249,6 @@ function articlePage(g: Guide, html: string, visible: Map<string, Guide>): strin
     datePublished: g.updated,
     dateModified: g.updated,
     mainEntityOfPage: `%VITE_SITE_URL%${path}`,
-    image: '%VITE_SITE_URL%/og.png',
     author: { '@type': 'Organization', name: SITE },
     publisher: { '@type': 'Organization', name: SITE },
   };
@@ -264,7 +263,7 @@ function articlePage(g: Guide, html: string, visible: Map<string, Guide>): strin
 ${html}
   <section class="practice" aria-labelledby="h-practice">
     <h2 id="h-practice">이 유형 직접 풀어 보기</h2>
-    <p>진단은 4개 영역에서 3문항씩 모두 12문항이며, 영역마다 여러 유형 가운데 일부가 나옵니다. 그래서 이 글의 유형이 매번 나오지는 않지만, 풀 때마다 숫자와 문장이 새로 만들어집니다.</p>
+    <p>진단은 영역마다 여러 유형 가운데 일부가 나옵니다. 그래서 이 글의 유형이 매번 나오지는 않지만, 풀 때마다 숫자와 코드가 새로 만들어집니다.</p>
     <p><a class="btn-primary" href="/diagnosis/">진단 시작</a></p>
   </section>
   ${
@@ -302,7 +301,7 @@ function indexPage(list: Guide[], dev: boolean): string {
   </section>`,
     )
     .join('');
-  const description = '기초연산·기초통계·도표분석·도표작성 유형별로 풀이 순서, 예제, 자주 하는 실수와 확인하는 습관을 정리한 NCS 수리능력 풀이 가이드입니다.';
+  const description = `${AREAS.map((a) => a.name).join('·')} 유형별로 풀이 순서, 예제, 자주 하는 실수와 확인하는 습관을 정리한 풀이 가이드입니다.`;
   return `${head({
     title: `유형별 풀이 가이드 · ${SITE}`,
     description,
@@ -314,7 +313,7 @@ function indexPage(list: Guide[], dev: boolean): string {
 <main class="page prose guide" id="main">
   <nav class="crumbs" aria-label="현재 위치"><a href="/">홈</a></nav>
   ${dev && list.some((g) => g.status === 'draft') ? DRAFT_BADGE.replace('초안 · ', '초안 포함 · ') : ''}
-  <p class="eyebrow">NCS 수리능력</p>
+  <p class="eyebrow">${esc(SITE)}</p>
   <h1 class="title">유형별 풀이 가이드</h1>
   <p class="lead">${description}</p>
 ${groups}

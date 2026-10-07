@@ -21,11 +21,11 @@ const DIST = process.env.DIST ?? 'dist';
 
 /**
  * 이미 공개된 정적 문구라서 허용하는 것 (서버로 옮기기 전부터 HTML에 손으로 쓴 문장이며 엔진 출력이 아니다)
- *  - 메인 페이지 예시 문항 설명의 실수 유형 이름
+ *  - 메인 페이지 예시 문항 설명의 실수 유형 이름(손으로 쓴 예시 코드 문항)
  *  - 문제 생성 방식 안내 페이지의 근접값 보기 설명
  */
 const ALLOWED: { file: string; needle: string }[] = [
-  { file: 'index.html', needle: '산술평균 착각' },
+  { file: 'index.html', needle: '반복 범위 오류' },
   { file: 'method/index.html', needle: '계산 실수' },
 ];
 

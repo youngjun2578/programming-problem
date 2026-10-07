@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { writeGuides, CONTENT_DIR, type GuideBuild } from './scripts/guides/build';
+import { SITE_NAME, SITE_TAGLINE } from './shared/site';
 
 const root = __dirname;
 const partial = (name: string) => readFileSync(resolve(root, 'src/partials', `${name}.html`), 'utf8');
@@ -52,6 +53,15 @@ ${visible
       : '',
   );
 
+/** 사이트 이름 자리(%SITE_NAME%, %SITE_TAGLINE%)를 shared/site.ts 값으로 바꾼다. 모르는 %SITE_…% 자리가 남으면 빌드를 멈춘다. */
+const SITE_VALUES: Record<string, string> = { SITE_NAME, SITE_TAGLINE };
+export function siteValues(html: string): string {
+  const out = html.replace(/%(SITE_[A-Z_]+)%/g, (m, k: string) => SITE_VALUES[k] ?? m);
+  const left = out.match(/%SITE_[A-Z_]+%/);
+  if (left) throw new Error(`모르는 사이트 값 자리 ${left[0]} (shared/site.ts와 vite.config.ts의 SITE_VALUES를 확인하세요)`);
+  return out;
+}
+
 /**
  * 애드센스 사이트 소유권 확인 meta. VITE_ADSENSE_ACCOUNT가 없거나 비어 있으면 아무것도 넣지 않는다(이전과 같은 HTML).
  * 값은 ca-pub-숫자 형식만 받는다. 형식이 틀리면 모든 환경에서 빌드를 멈추고, 값은 HTML에도 오류 메시지에도 넣지 않는다.
@@ -70,9 +80,11 @@ function partials(flags: BuildFlags, guides: () => GuideBuild, headMeta = ''): P
       order: 'pre',
       handler: (html) => {
         const visible = guides().visible;
-        const out = guideList(
-          guideLinks(applyBuildFlags(html.replace('<!--#masthead-->', partial('masthead')).replace('<!--#footer-->', partial('footer')), flags), visible.length > 0),
-          visible,
+        const out = siteValues(
+          guideList(
+            guideLinks(applyBuildFlags(html.replace('<!--#masthead-->', partial('masthead')).replace('<!--#footer-->', partial('footer')), flags), visible.length > 0),
+            visible,
+          ),
         );
         return headMeta ? out.replace('</head>', `${headMeta}\n</head>`) : out;
       },

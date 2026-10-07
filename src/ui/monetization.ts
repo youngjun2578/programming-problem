@@ -12,6 +12,7 @@
 import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js';
 import { PASS_PRICE_KRW } from '../../shared/product';
 import { esc } from './dom';
+import { SITE_NAME } from '../../shared/site';
 import '../styles/account.css';
 
 export type Provider = 'google' | 'kakao';
@@ -338,7 +339,7 @@ export async function chooseAndSignIn(returnPath: string, purpose: 'login' | 'pu
 
 export const PASS_BENEFITS = [
   '새 문제로 무제한 진단',
-  '12문항 전체 해설',
+  '전 문항 해설',
   '영역별 상세 리포트(취약 유형과 틀린 패턴)',
   '상세까지 담긴 인쇄 / PDF 저장',
   '한 번 결제로 추가 결제 없이 계속 이용(구독 아님)',
@@ -401,7 +402,7 @@ export function renderPaywall(app: HTMLElement, mode: 'free-used' | 'purchase', 
     const showCard = !(s.status === 'member' && s.entitlement === 'active');
     app.innerHTML = `
     <main class="page" id="main" data-paywall>
-      <p class="eyebrow">NCS 수리능력 진단</p>
+      <p class="eyebrow">${esc(SITE_NAME)}</p>
       <h1 class="title" tabindex="-1">${mode === 'free-used' ? '무료 진단을 이미 사용했습니다' : '이용권 구매'}</h1>
       ${mode === 'free-used' ? '<p class="lead">무료 진단은 한 번 이용할 수 있습니다. 새 문제로 다시 진단하려면 이용권이 필요합니다.</p>' : ''}
       <p class="notice" role="status">${esc(status)}</p>

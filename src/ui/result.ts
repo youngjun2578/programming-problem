@@ -1,6 +1,7 @@
 import type { AreaDetail, Explanation, ReportResponse, SummaryRow } from '../../shared/api';
 import { renderChart, renderFigure } from '../../shared/charts/render';
 import { CIRC, esc, fmtDuration } from './dom';
+import { SITE_NAME } from '../../shared/site';
 
 /*
  * 결과 화면. 정답률·평균 시간·수준 판정은 모두 서버가 계산해 보낸 값을 그대로 그린다.
@@ -97,8 +98,8 @@ export function renderResult(app: HTMLElement, res: ReportResponse, retry: () =>
   app.innerHTML = `
   <main class="page report" id="main">
     <header class="doc-head">
-      <p class="eyebrow">영역별 결과 · 수리능력 연습 진단</p>
-      <h1 class="title">NCS 수리능력 진단 리포트</h1>
+      <p class="eyebrow">영역별 결과 · 프로그래밍·SQL 연습 진단</p>
+      <h1 class="title">${esc(SITE_NAME)} 리포트</h1>
       <dl class="meta">
         <div><dt>진단 일시</dt><dd>${when}</dd></div>
         <div><dt>문항 구성</dt><dd>${r.total}문항 (영역별 ${perArea}문항)</dd></div>

@@ -3,7 +3,7 @@
  *   npx tsx scripts/check-production.ts      (DIST 기본값 dist)
  *
  * VERCEL_ENV가 "production"일 때만 검사한다. 로컬과 Preview 빌드는 그냥 통과한다
- * (저장소의 .env에는 example.com·[운영자 이름] 같은 자리 표시만 있으므로).
+ * (로컬 .env에는 example.com·[운영자 이름] 같은 자리 표시만 두므로).
  *
  * 찾는 문자열
  *  - example.com    : VITE_SITE_URL·VITE_CONTACT_EMAIL 자리 표시

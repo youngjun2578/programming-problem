@@ -55,7 +55,7 @@ for (const g of pub) {
   if (!desc) bad(`${g.slug}: description 없음`);
   if (!canon.endsWith(`/guide/${g.slug}/`) || canon.includes('%VITE')) bad(`${g.slug}: canonical ${canon}`);
   if (/name="robots" content="noindex"/.test(h)) bad(`${g.slug}: 발행 글에 noindex`);
-  for (const p of ['og:title', 'og:description', 'og:url', 'og:type', 'og:image']) if (!h.includes(`property="${p}"`)) bad(`${g.slug}: ${p} 없음`);
+  for (const p of ['og:title', 'og:description', 'og:url', 'og:type']) if (!h.includes(`property="${p}"`)) bad(`${g.slug}: ${p} 없음`);
   if ((h.match(/<h1[\s>]/g) ?? []).length !== 1) bad(`${g.slug}: h1 개수`);
   if (titles.has(title)) bad(`title 중복: ${g.slug}, ${titles.get(title)}`);
   if (descs.has(desc)) bad(`description 중복: ${g.slug}, ${descs.get(desc)}`);
