@@ -30,7 +30,7 @@ export const AREAS: AreaMeta[] = [
     id: 'sql',
     name: 'SQL',
     description: '표와 SQL 문을 함께 읽고 조회 결과를 정확히 예측하는지 봅니다. WHERE 조건의 비교 연산자와 AND·OR가 핵심이에요.',
-    studyOrder: ['SELECT 조건 조회'],
+    studyOrder: ['SELECT 조건 조회', '집계 함수', 'GROUP BY와 HAVING', 'JOIN 결과'],
     targetSec: 90,
   },
 ];

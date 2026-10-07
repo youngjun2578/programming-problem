@@ -45,11 +45,11 @@ export interface TableSpec {
   rows: (string | number)[][];
 }
 
-/** 코드 조각. lang은 화면에 보이는 언어 이름(예: "Python", "SQL"). table이 있으면 코드 위에 함께 보여 준다(SQL의 대상 표 등). */
+/** 코드 조각. lang은 화면에 보이는 언어 이름(예: "Python", "SQL"). tables가 있으면 코드 위에 함께 보여 준다(SQL의 대상 표, 값이 없으면 "NULL"). */
 export interface CodeSpec {
   lang: string;
   code: string;
-  table?: TableSpec;
+  tables?: TableSpec[];
 }
 
 export type Figure =

@@ -19,7 +19,7 @@ import { MISTAKES } from '../server/engine/mistakes.js';
 import { renderChart, renderTable } from '../shared/charts/render.js';
 import type { Figure } from '../shared/charts/types.js';
 import { analyze, judge } from '../server/report/analyze.js';
-import { areaQuestionCount, generateQuestions } from '../server/diagnosis.js';
+import { areaQuestionCount, generateQuestions, PER_AREA } from '../server/diagnosis.js';
 import type { DiagnosisLevel } from '../server/levels.js';
 import { availableFor } from '../server/engine/types.js';
 import { LANGUAGE_IDS, LANGUAGES } from '../shared/languages.js';
@@ -29,8 +29,8 @@ const PER_TEMPLATE = Number(process.env.PER_TEMPLATE ?? 3000);
 const SETS = Number(process.env.SETS ?? 1000);
 /** 기본은 고정 시드(재현 가능). SEED_OFFSET=임의값 으로 다른 범위를 탐색할 수 있다. */
 const SEED_OFFSET = Number(process.env.SEED_OFFSET ?? 0);
-/** 영역별 최소 유형 수. 유형이 PER_AREA보다 적은 영역은 있는 만큼만 출제한다(areaQuestionCount). */
-const MIN_TEMPLATES_PER_AREA = 1;
+/** 영역별 최소 유형 수. 세트가 영역마다 서로 다른 유형 PER_AREA개를 고르므로 그보다 적으면 안 된다. */
+const MIN_TEMPLATES_PER_AREA = PER_AREA;
 const MAX_FILLER_RATE = 0.25;
 const MIN_PHRASINGS = 3;
 /** 단계별 구현 중에는 비어 있는 영역을 경고로만 처리한다. 모든 영역이 갖춰지면 true. */
@@ -43,7 +43,7 @@ const fail = (msg: string) => {
 
 function figureNumbers(f: Figure): number[] {
   if (f.kind === 'table') return f.table.rows.flat().filter((x): x is number => typeof x === 'number');
-  if (f.kind === 'code') return f.table ? f.table.rows.flat().filter((x): x is number => typeof x === 'number') : [];
+  if (f.kind === 'code') return (f.tables ?? []).flatMap((t) => t.rows.flat().filter((x): x is number => typeof x === 'number'));
   const s = f.spec;
   if (s.type === 'scatter') return [...s.xs, ...s.ys];
   return s.values;
@@ -57,7 +57,7 @@ function checkFigure(id: string, f: Figure) {
     // 코드는 음수·연산자가 정상적으로 들어갈 수 있으므로 비정상 값 이름만 본다
     if (!f.code.trim()) fail(`${id}: 코드가 비어 있음`);
     if (/NaN|Infinity|undefined|\[object/.test(f.code)) fail(`${id}: 코드에 비정상 값`);
-    if (f.table) checkFigure(id, { kind: 'table', table: f.table });
+    for (const t of f.tables ?? []) checkFigure(id, { kind: 'table', table: t });
     return;
   }
   const html = f.kind === 'chart' ? renderChart(f.spec) : renderTable(f.table);

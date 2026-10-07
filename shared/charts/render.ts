@@ -185,7 +185,7 @@ export function renderCode(lang: string, code: string): string {
 
 export function renderFigure(f: Figure): string {
   if (f.kind === 'code')
-    return `<figure class="figure figure-code"><figcaption><span class="fig-title">${esc(f.lang)}</span></figcaption>${f.table ? renderTable(f.table) : ''}${renderCode(f.lang, f.code)}</figure>`;
+    return `<figure class="figure figure-code"><figcaption><span class="fig-title">${esc(f.lang)}</span></figcaption>${(f.tables ?? []).map(renderTable).join('')}${renderCode(f.lang, f.code)}</figure>`;
   if (f.kind === 'table') return `<figure class="figure">${renderTable(f.table)}<p class="fig-foot">${NOTE}</p></figure>`;
   const unit = f.spec.type === 'pie' && f.spec.unit ? ` <span class="unit">(단위: ${esc(f.spec.unit)})</span>` : '';
   const title = `<figcaption>${f.spec.title ? `<span class="fig-title">${esc(f.spec.title)}</span>${unit}` : ''}${NOTE}</figcaption>`;

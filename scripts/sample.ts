@@ -14,7 +14,7 @@ for (const t of TEMPLATES.filter((t) => t.id.startsWith(prefix) && availableFor(
     const p = makeProblem(t, new Rng(Date.now() + i * 101), { lang, difficulty: difficulty });
     console.log(`\n[${t.id}] ${p.text}`);
     if (p.figure?.kind === 'code') {
-      if (p.figure.table) console.log('  (표)', JSON.stringify(p.figure.table));
+      for (const t of p.figure.tables ?? []) console.log(`  (표 ${t.caption})`, JSON.stringify(t.rows));
       console.log(`  (${p.figure.lang} 코드)\n` + p.figure.code.replace(/^/gm, '    | '));
     } else if (p.figure) console.log('  (도표)', JSON.stringify(p.figure.kind === 'chart' ? p.figure.spec : p.figure.table));
     p.choices.forEach((c, k) => console.log(`  ${k === p.answerIndex ? '*' : ' '} ${c.label}${c.mistakeTag ? `  ← ${c.mistakeTag}` : ''}`));
