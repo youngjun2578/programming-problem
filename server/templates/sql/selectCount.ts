@@ -16,7 +16,7 @@ export const selectCount: Template<number> = {
   id: 'sql.selectCount',
   area: 'sql',
   subtype: 'SELECT 조건 조회',
-  difficulty: 1,
+  difficulties: [1],
   generate(rng: Rng) {
     const dept = rng.pick(DEPTS);
     const others = DEPTS.filter((d) => d !== dept);

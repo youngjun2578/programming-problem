@@ -4,28 +4,29 @@
 import { TEMPLATES } from './registry.js';
 import { AREAS, AREA_BY_ID } from './areas.js';
 import { generateSet } from './engine/set.js';
-import type { Problem } from './engine/types.js';
+import type { Difficulty, Problem } from './engine/types.js';
 import { analyze, LEVEL_LABEL, type Report } from './report/analyze.js';
 import type { Explanation, PublicChoice, PublicQuestion, ReportResponse } from '../shared/api.js';
 import { FREE_EXPLANATION_COUNT } from '../shared/product.js';
 import type { DiagnosisLevel } from '../shared/api.js';
 import { languageName, type LanguageId } from '../shared/languages.js';
 
-/**
- * 영역별 문항 수. 세트는 영역 안에서 서로 다른 유형만 고르므로 유형 수보다 클 수 없다.
- * 지금은 영역마다 임시 샘플 유형이 하나뿐이라 1문항이다. 유형을 늘리면 함께 올린다.
- */
-export const PER_AREA = 1;
+/** 영역별 문항 수. 세트는 영역 안에서 서로 다른 유형만 고르므로 영역의 유형 수보다 클 수 없다(지금 영역마다 4유형). */
+export const PER_AREA = 3;
+
+/** 영역 안 문항 자리별 난이도(docs/engine-design.md 3절). 기본 1·1·2, 심화 2·2·3 */
+export const SLOT_DIFFICULTY: Record<DiagnosisLevel, readonly Difficulty[]> = { basic: [1, 1, 2], advanced: [2, 2, 3] };
 const AREA_IDS = AREAS.filter((a) => TEMPLATES.some((t) => t.area === a.id)).map((a) => a.id);
-export const QUESTION_COUNT = AREA_IDS.length * PER_AREA;
+/** 영역의 문항 수: PER_AREA와 그 영역 유형 수 가운데 작은 값(유형이 모자란 영역은 있는 만큼만) */
+export const areaQuestionCount = (area: (typeof AREA_IDS)[number]) => Math.min(PER_AREA, new Set(TEMPLATES.filter((t) => t.area === area).map((t) => t.subtype)).size);
+export const QUESTION_COUNT = AREA_IDS.reduce((n, a) => n + areaQuestionCount(a), 0);
 
 /**
- * level을 주지 않으면 기본 세트.
- * 심화 전용 템플릿은 아직 없다. 심화 스위치(ADVANCED_LEVEL_ENABLED)를 켜면 임시로 기본과 같은 템플릿을 쓰며,
- * 생성 시드가 따로라(server/token.ts의 generationSeed) 같은 공개 시드에서도 다른 문항이 나온다. 문항 수는 기본과 같다.
+ * level을 주지 않으면 기본 세트. 심화(서버 스위치 ADVANCED_LEVEL_ENABLED가 켜졌을 때만)는 같은 템플릿을 더 높은 난이도로 만든다.
+ * 생성 시드도 따로라(server/token.ts의 generationSeed) 같은 공개 시드에서도 다른 문항이 나온다. 문항 수는 기본과 같다.
  */
-export function generateQuestions(genSeed: number, lang: LanguageId, _level: DiagnosisLevel = 'basic'): Problem[] {
-  return generateSet(TEMPLATES, genSeed, { areas: AREA_IDS, perArea: PER_AREA, lang });
+export function generateQuestions(genSeed: number, lang: LanguageId, level: DiagnosisLevel = 'basic'): Problem[] {
+  return generateSet(TEMPLATES, genSeed, { areas: AREA_IDS, perArea: PER_AREA, lang, difficulties: SLOT_DIFFICULTY[level] });
 }
 
 /** 보기에서 정답 여부·실수 유형을 빼고 표시용 값만 남긴다 */

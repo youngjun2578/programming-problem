@@ -10,7 +10,7 @@
 import { TEMPLATES } from '../../server/registry.js';
 import { Rng } from '../../server/engine/rng.js';
 import { makeProblem } from '../../server/engine/set.js';
-import type { Problem } from '../../server/engine/types.js';
+import type { Difficulty, Problem } from '../../server/engine/types.js';
 import type { LanguageId } from '../../shared/languages.js';
 
 export interface Solved {
@@ -38,10 +38,10 @@ export interface Example {
 }
 
 /** 템플릿 id·시드·언어로 예제를 만들고 검산한다. 문제 문장이 풀이 함수의 match와 맞아야 한다. */
-export function buildExample(templateId: string, seed: number, lang: LanguageId = 'python'): Example {
+export function buildExample(templateId: string, seed: number, lang: LanguageId = 'python', difficulty: Difficulty = 1): Example {
   const tpl = TEMPLATES.find((t) => t.id === templateId);
   need(tpl, `없는 템플릿 ${templateId}`);
-  const problem = makeProblem(tpl, new Rng(seed), { lang });
+  const problem = makeProblem(tpl, new Rng(seed), { lang, difficulty });
   const solver = SOLVERS[templateId]?.find((s) => s.match.test(problem.text));
   need(solver, `${templateId} 시드 ${seed}: 이 문제 형태의 풀이 함수가 없음 — ${problem.text.slice(0, 40)}`);
   const solved = solver.solve(problem);
@@ -59,7 +59,7 @@ export function findSeeds(templateId: string, match: RegExp, count = 5, from = 1
   const out: number[] = [];
   for (let s = from; out.length < count && s < from + 20000; s++) {
     try {
-      const p = makeProblem(tpl, new Rng(s), { lang });
+      const p = makeProblem(tpl, new Rng(s), { lang, difficulty: 1 });
       if (match.test(p.text)) {
         buildExample(templateId, s, lang);
         out.push(s);

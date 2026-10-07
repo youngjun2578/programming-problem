@@ -557,3 +557,9 @@
 .confirm-actions .btn-secondary {
   padding: var(--s3) var(--s4);
 }
+
+/* 여러 줄 출력 보기(프로그래밍 문항): 한 줄에 값 하나 */
+.choice-text,
+.ans-text {
+  white-space: pre-line;
+}

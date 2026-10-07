@@ -11,12 +11,10 @@
  */
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
-import { TEMPLATES } from '../server/registry.js';
-import { AREAS, AREA_BY_ID } from '../server/areas.js';
-import { generateSet } from '../server/engine/set.js';
+import { AREA_BY_ID } from '../server/areas.js';
 import { analyze, type Attempt } from '../server/report/analyze.js';
 import type { Problem } from '../server/engine/types.js';
-import { PER_AREA } from '../server/diagnosis.js';
+import { generateQuestions } from '../server/diagnosis.js';
 import { LANGUAGE_IDS } from '../shared/languages.js';
 
 export const GOLDEN_FILE = 'tests/golden/golden.jsonl.gz';
@@ -64,11 +62,10 @@ function snapshotReport(qs: Problem[], picked: number[], secs: number[]) {
 }
 
 if (process.argv[1]?.endsWith('golden.ts')) {
-  const areas = AREAS.filter((a) => TEMPLATES.some((t) => t.area === a.id)).map((a) => a.id);
   const lines: string[] = [];
   goldenSeeds().forEach((seed, s) => {
     for (const lang of LANGUAGE_IDS) {
-      const qs = generateSet(TEMPLATES, seed, { areas, perArea: PER_AREA, lang });
+      const qs = generateQuestions(seed, lang);
       const runs = inputsFor(qs, s).map((inp) => ({ ...inp, report: snapshotReport(qs, inp.picked, inp.secs) }));
       lines.push(JSON.stringify({ seed, lang, questions: qs, runs }));
     }

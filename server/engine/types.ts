@@ -32,13 +32,16 @@ export interface Generated<V = number> {
 export interface GenContext {
   /** 사용자가 고른 프로그래밍 언어. 프로그래밍 템플릿은 이 언어로만 코드를 만든다(SQL 템플릿은 쓰지 않음). */
   lang: LanguageId;
+  /** 이 문항의 난이도(코드 길이·변수 수·개념 수, docs/engine-design.md 3절). 세트가 자리마다 정한다. */
+  difficulty: Difficulty;
 }
 
 export interface Template<V = any> {
   id: string;
   area: AreaId;
   subtype: string;
-  difficulty: Difficulty;
+  /** 만들 수 있는 난이도 */
+  difficulties: readonly Difficulty[];
   /** 언어 전용 템플릿이면 출제할 수 있는 언어. 없으면 모든 언어 */
   langs?: readonly LanguageId[];
   generate(rng: Rng, ctx: GenContext): Generated<V>;

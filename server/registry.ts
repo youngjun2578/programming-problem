@@ -1,11 +1,17 @@
 import type { Template } from './engine/types.js';
-import { loopOutput } from './templates/programming/loopOutput.js';
+import { loop } from './templates/programming/loop.js';
+import { branch } from './templates/programming/branch.js';
+import { array } from './templates/programming/array.js';
+import { func } from './templates/programming/func.js';
 import { selectCount } from './templates/sql/selectCount.js';
 
-/** 임시 샘플: 영역마다 템플릿 하나씩. 실제 문제 템플릿을 만들면 여기에 등록한다. */
+/** 유형 등록부. 유형표와 번호는 docs/engine-design.md 7절. */
 export const TEMPLATES: Template[] = [
-  // 프로그래밍
-  loopOutput,
+  // 프로그래밍: P1 반복, P3 조건 분기, P4 배열, P7 함수·재귀
+  loop,
+  branch,
+  array,
+  func,
   // SQL
   selectCount,
 ];

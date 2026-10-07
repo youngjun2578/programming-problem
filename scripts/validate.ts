@@ -14,22 +14,23 @@ import { TEMPLATES } from '../server/registry.js';
 import { AREAS } from '../server/areas.js';
 import { Rng } from '../server/engine/rng.js';
 import { buildChoices, hasBadToken, isValidValue } from '../server/engine/choices.js';
-import { generateSet } from '../server/engine/set.js';
 import { hasAtMostDecimals, num } from '../server/engine/format.js';
 import { MISTAKES } from '../server/engine/mistakes.js';
 import { renderChart, renderTable } from '../shared/charts/render.js';
 import type { Figure } from '../shared/charts/types.js';
 import { analyze, judge } from '../server/report/analyze.js';
-import { PER_AREA } from '../server/diagnosis.js';
+import { areaQuestionCount, generateQuestions } from '../server/diagnosis.js';
+import type { DiagnosisLevel } from '../server/levels.js';
 import { availableFor } from '../server/engine/types.js';
-import { LANGUAGE_IDS } from '../shared/languages.js';
+import { LANGUAGE_IDS, LANGUAGES } from '../shared/languages.js';
 
 const PER_TEMPLATE = Number(process.env.PER_TEMPLATE ?? 3000);
-const SETS = Number(process.env.SETS ?? 5000);
+/** 언어·수준 조합(4 × 2)마다 만드는 세트 수 */
+const SETS = Number(process.env.SETS ?? 1000);
 /** 기본은 고정 시드(재현 가능). SEED_OFFSET=임의값 으로 다른 범위를 탐색할 수 있다. */
 const SEED_OFFSET = Number(process.env.SEED_OFFSET ?? 0);
-/** 영역별 최소 유형 수. 세트가 영역마다 서로 다른 유형 PER_AREA개를 고르므로 그보다 적으면 세트를 만들 수 없다. */
-const MIN_TEMPLATES_PER_AREA = PER_AREA;
+/** 영역별 최소 유형 수. 유형이 PER_AREA보다 적은 영역은 있는 만큼만 출제한다(areaQuestionCount). */
+const MIN_TEMPLATES_PER_AREA = 1;
 const MAX_FILLER_RATE = 0.25;
 const MIN_PHRASINGS = 3;
 /** 단계별 구현 중에는 비어 있는 영역을 경고로만 처리한다. 모든 영역이 갖춰지면 true. */
@@ -84,10 +85,11 @@ for (const tpl of TEMPLATES) {
   for (let i = 0; i < PER_TEMPLATE && langs.length; i++) {
     const rng = new Rng(i * 7919 + 13 + SEED_OFFSET);
     const lang = langs[i % langs.length];
-    const id = `${tpl.id}#${i}(${lang})`;
+    const difficulty = tpl.difficulties[Math.floor(i / langs.length) % tpl.difficulties.length];
+    const id = `${tpl.id}#${i}(${lang}, 난이도 ${difficulty})`;
     let g;
     try {
-      g = tpl.generate(rng, { lang });
+      g = tpl.generate(rng, { lang, difficulty });
     } catch (e) {
       fail(`${id}: generate 예외 ${(e as Error).message}`);
       continue;
@@ -103,7 +105,8 @@ for (const tpl of TEMPLATES) {
     }
     if (!/[?.)]$/.test(g.text.trim())) fail(`${id}: 문장이 물음표/마침표로 끝나지 않음: ${g.text}`);
     // 해설에 정답 값이 실제로 나오는지 (해설과 정답의 불일치 방지)
-    const ansToken = typeof g.answer === 'number' ? num(g.answer) : typeof g.answer === 'string' ? g.answer : null;
+    // 여러 줄 출력은 해설에 "3, 5, 8"처럼 쉼표로 이어 적는다
+    const ansToken = typeof g.answer === 'number' ? num(g.answer) : typeof g.answer === 'string' ? g.answer.split('\n').join(', ') : null;
     const stepsText = g.steps.join(' ');
     if (ansToken && !stepsText.includes(ansToken) && !stepsText.includes(g.format(g.answer)) && !g.chart) fail(`${id}: 해설에 정답 값(${ansToken})이 없음`);
     for (const s of g.steps) if (hasBadToken(s)) fail(`${id}: 해설에 비정상 값: ${s}`);
@@ -148,7 +151,7 @@ for (const tpl of TEMPLATES) {
   rows.push({
     id: tpl.id,
     유형: tpl.subtype,
-    난이도: tpl.difficulty,
+    난이도: tpl.difficulties.join('·'),
     성공: `${generated}/${PER_TEMPLATE}`,
     문장틀: skeletons.size,
     실수태그: tags.size,
@@ -177,39 +180,44 @@ for (const a of AREAS) {
 if (new Set(TEMPLATES.map((t) => t.id)).size !== TEMPLATES.length) fail('템플릿 id 중복');
 
 // 세트
-console.log(`세트 ${SETS}개 × 언어 ${LANGUAGE_IDS.length}개 생성 검사 (영역 ${activeAreas.length}개 × ${PER_AREA}문항)`);
+const expectCount = activeAreas.reduce((n, a) => n + areaQuestionCount(a.id), 0);
+console.log(`세트 ${SETS}개 × 언어 ${LANGUAGE_IDS.length}개 × 수준 2개 생성 검사 (영역 ${activeAreas.map((a) => `${a.name} ${areaQuestionCount(a.id)}`).join(', ')}문항)`);
 let setFail = 0;
-for (let s = 0; s < SETS * LANGUAGE_IDS.length; s++) {
+for (let s = 0; s < SETS * LANGUAGE_IDS.length * 2; s++) {
   const lang = LANGUAGE_IDS[s % LANGUAGE_IDS.length];
-  const seed = ((s >> 2) * 2654435761 + SEED_OFFSET) >>> 0;
+  const level: DiagnosisLevel = (s >> 2) % 2 ? 'advanced' : 'basic';
+  const seed = ((s >> 3) * 2654435761 + SEED_OFFSET) >>> 0;
   let set;
   try {
-    set = generateSet(TEMPLATES, seed, { areas: activeAreas.map((a) => a.id), perArea: PER_AREA, lang });
+    set = generateQuestions(seed, lang, level);
   } catch (e) {
-    fail(`세트 ${seed}: 생성 실패 ${(e as Error).message}`);
+    fail(`세트 ${seed}(${lang}, ${level}): 생성 실패 ${(e as Error).message}`);
     setFail++;
     continue;
   }
-  if (set.length !== activeAreas.length * PER_AREA) fail(`세트 ${seed}: 문항 수 ${set.length}`);
-  const texts = new Set(set.map((p) => p.text));
-  if (texts.size !== set.length) fail(`세트 ${seed}: 같은 세트 내 문장 중복`);
+  if (set.length !== expectCount) fail(`세트 ${seed}: 문항 수 ${set.length}`);
+  const keys = new Set(set.map((p) => JSON.stringify([p.text, p.figure ?? null])));
+  if (keys.size !== set.length) fail(`세트 ${seed}: 같은 세트 안에 같은 문항(문장·코드) 중복`);
   for (const a of activeAreas) {
     const ps = set.filter((p) => p.area === a.id);
-    if (ps.length !== PER_AREA) fail(`세트 ${seed}: ${a.name} ${ps.length}문항`);
+    if (ps.length !== areaQuestionCount(a.id)) fail(`세트 ${seed}: ${a.name} ${ps.length}문항`);
     if (new Set(ps.map((p) => p.subtype)).size !== ps.length) fail(`세트 ${seed}: ${a.name} 유형 중복`);
+    if (ps.some((p, i) => i > 0 && p.difficulty < ps[i - 1].difficulty)) fail(`세트 ${seed}: ${a.name} 난이도가 오름차순이 아님`);
   }
+  // 프로그래밍 문항은 고른 언어의 코드만
+  for (const p of set.filter((q) => q.area === 'programming'))
+    if (p.figure?.kind !== 'code' || p.figure.lang !== LANGUAGES.find((l) => l.id === lang)!.name) fail(`세트 ${seed}: ${lang} 세트에 다른 언어 코드`);
 }
 // 같은 시드 → 같은 세트 (재현성)
-const areas = activeAreas.map((a) => a.id);
 for (const lang of LANGUAGE_IDS) {
-  const a1 = JSON.stringify(generateSet(TEMPLATES, 42, { areas, perArea: PER_AREA, lang }));
-  const a2 = JSON.stringify(generateSet(TEMPLATES, 42, { areas, perArea: PER_AREA, lang }));
+  const a1 = JSON.stringify(generateQuestions(42, lang));
+  const a2 = JSON.stringify(generateQuestions(42, lang));
   if (a1 !== a2) fail(`같은 시드에서 다른 세트가 나옴 (재현성 실패, ${lang})`);
 }
 
 // 리포트 분석 규칙
 {
-  const set = generateSet(TEMPLATES, 7, { areas, perArea: PER_AREA, lang: 'python' });
+  const set = generateQuestions(7, 'python');
   const right = set.map((q) => ({ picked: q.answerIndex, sec: 30 }));
   const wrongPick = (q: (typeof set)[number]) => (q.answerIndex + 1) % 5;
   const allRight = analyze(set, right, 360);
@@ -229,8 +237,9 @@ for (const lang of LANGUAGE_IDS) {
   const oneWrong = set.map((q, i) => ({ picked: i === 0 ? wrongPick(q) : q.answerIndex, sec: 30 }));
   const r1 = analyze(set, oneWrong, 360);
   const a1 = r1.areas.find((a) => a.meta.id === firstArea)!;
-  const want1 = judge((PER_AREA - 1) / PER_AREA, 30, a1.meta.targetSec).level;
-  if (a1.level !== want1) fail(`리포트: ${PER_AREA}문항 중 1문항 오답이면 ${want1}여야 함 (${a1.level})`);
+  const n1 = areaQuestionCount(firstArea);
+  const want1 = judge((n1 - 1) / n1, 30, a1.meta.targetSec).level;
+  if (a1.level !== want1) fail(`리포트: ${n1}문항 중 1문항 오답이면 ${want1}여야 함 (${a1.level})`);
   if (judge(2 / 3, 30, 75).level !== 'improve') fail('리포트: 3문항 중 2문항 정답이면 보완 필요여야 함');
   if (r1.priority[0].meta.id !== firstArea) fail('리포트: 학습 우선순위가 수준 낮은 영역부터가 아님');
   if (a1.patterns[0]?.tag !== set[0].choices[wrongPick(set[0])].mistakeTag) fail('리포트: 틀린 패턴이 고른 보기의 mistakeTag와 다름');

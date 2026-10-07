@@ -23,7 +23,7 @@ export const AREAS: AreaMeta[] = [
     id: 'programming',
     name: '프로그래밍',
     description: 'C·C++·Python·Java 코드를 읽고 실행 결과를 정확히 예측하는지 봅니다. 반복 범위와 조건이 어디서 끝나는지가 핵심이에요.',
-    studyOrder: ['반복문 출력'],
+    studyOrder: ['반복문 출력·누적', '조건 분기', '배열 순회', '함수와 재귀'],
     targetSec: 90,
   },
   {
