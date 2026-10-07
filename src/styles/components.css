@@ -519,6 +519,10 @@
 .data-table tbody th {
   font-weight: 500;
 }
+.data-table td.null {
+  color: var(--muted);
+  font-style: italic;
+}
 .figure:has(.data-table) {
   overflow-x: auto;
 }

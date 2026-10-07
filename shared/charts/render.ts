@@ -168,7 +168,8 @@ export function renderChart(spec: ChartSpec, size: ChartSize = DEFAULT): string 
 }
 
 export function renderTable(t: TableSpec): string {
-  const cell = (c: string | number) => (typeof c === 'number' ? `<td class="num">${num(c)}</td>` : `<td>${esc(c)}</td>`);
+  // SQL 표의 NULL은 숫자 열에 주로 나오므로 숫자처럼 오른쪽에 붙이고 흐리게 보인다
+  const cell = (c: string | number) => (typeof c === 'number' ? `<td class="num">${num(c)}</td>` : c === 'NULL' ? '<td class="num null">NULL</td>' : `<td>${esc(c)}</td>`);
   return `<table class="data-table">${t.caption ? `<caption>${esc(t.caption)}${t.unit ? ` <span class="unit">(단위: ${esc(t.unit)})</span>` : ''}</caption>` : ''}<thead><tr>${t.head
     .map((x) => `<th scope="col">${esc(x)}</th>`)
     .join('')}</tr></thead><tbody>${t.rows
