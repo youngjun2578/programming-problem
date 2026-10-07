@@ -32,6 +32,26 @@ const GUIDE_LINKS: Record<string, string> = {
 const guideLinks = (html: string, show: boolean) =>
   html.replace(/([ \t]*)<!--#guide-link:(\w+)-->\n?/g, (_, indent: string, k: string) => (show ? `${indent}${GUIDE_LINKS[k]}\n` : ''));
 
+/** 메인 화면 "먼저 읽어 볼 풀이 가이드" 목록에 넣는 글 수 */
+const GUIDE_LIST_MAX = 3;
+const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+/** 메인 화면 가이드 목록 자리(<!--#guide-list-->): 보이는 글 앞쪽 몇 편으로 채우고, 글이 없으면 자리를 통째로 지운다 */
+const guideList = (html: string, visible: GuideBuild['visible']) =>
+  html.replace(/[ \t]*<!--#guide-list-->\n?/g, () =>
+    visible.length
+      ? `  <section aria-labelledby="h-guides">
+    <h2 class="section-title" id="h-guides">먼저 읽어 볼 풀이 가이드</h2>
+    <ul class="steps-list">
+${visible
+  .slice(0, GUIDE_LIST_MAX)
+  .map((g) => `      <li><a href="/guide/${g.slug}/">${escHtml(g.title)}</a>: ${escHtml(g.description)}</li>`)
+  .join('\n')}
+    </ul>
+  </section>
+`
+      : '',
+  );
+
 /**
  * 애드센스 사이트 소유권 확인 meta. VITE_ADSENSE_ACCOUNT가 없거나 비어 있으면 아무것도 넣지 않는다(이전과 같은 HTML).
  * 값은 ca-pub-숫자 형식만 받는다. 형식이 틀리면 모든 환경에서 빌드를 멈추고, 값은 HTML에도 오류 메시지에도 넣지 않는다.
@@ -49,9 +69,10 @@ function partials(flags: BuildFlags, guides: () => GuideBuild, headMeta = ''): P
     transformIndexHtml: {
       order: 'pre',
       handler: (html) => {
-        const out = guideLinks(
-          applyBuildFlags(html.replace('<!--#masthead-->', partial('masthead')).replace('<!--#footer-->', partial('footer')), flags),
-          guides().visible.length > 0,
+        const visible = guides().visible;
+        const out = guideList(
+          guideLinks(applyBuildFlags(html.replace('<!--#masthead-->', partial('masthead')).replace('<!--#footer-->', partial('footer')), flags), visible.length > 0),
+          visible,
         );
         return headMeta ? out.replace('</head>', `${headMeta}\n</head>`) : out;
       },

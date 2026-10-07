@@ -52,7 +52,7 @@ export interface GuideBuild {
   /** 생성한 HTML (rollup input 이름 → 파일 경로) */
   pages: Record<string, string>;
   /** 이번 빌드에서 보이는 글(sitemap·링크용) */
-  visible: { slug: string; updated: string; draft: boolean }[];
+  visible: { slug: string; title: string; description: string; updated: string; draft: boolean }[];
   stats: GuideStat[];
 }
 
@@ -367,7 +367,7 @@ export function writeGuides(opts: { root?: string; includeDrafts: boolean }): Gu
   }
   return {
     pages,
-    visible: shown.map((g) => ({ slug: g.slug, updated: g.updated, draft: g.status === 'draft' })),
+    visible: shown.map((g) => ({ slug: g.slug, title: g.title, description: g.description, updated: g.updated, draft: g.status === 'draft' })),
     stats,
   };
 }

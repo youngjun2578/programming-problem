@@ -36,6 +36,7 @@ for (const page of ['index.html', 'method/index.html', 'diagnosis/index.html']) 
   if (!pub.length && has) bad(`${page}: 발행 글이 없는데 /guide/ 링크가 있음`);
 }
 if (pub.length && !read('index.html').includes('class="guide-more"')) bad('메인 하단 가이드 링크가 없음');
+if (read('index.html').includes('<!--#guide-')) bad('메인에 치환되지 않은 가이드 자리 표시가 남음');
 
 const titles = new Map<string, string>();
 const descs = new Map<string, string>();
