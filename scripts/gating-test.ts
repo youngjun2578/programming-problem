@@ -6,7 +6,7 @@
  *  - 스위치 꺼짐: 로그인 헤더를 무시하고 이전과 똑같은 전체 응답(gated 필드 없음)
  *  - 켜짐: 게스트 / 로그인했지만 이용권 없음 → 무료 응답, 이용권 있음 → 전체
  *  - 만료·변조·다른 키·모양이 틀린 토큰 → 401, 인증 서버·DB 장애 → 503
- *  - 무료 응답 본문에 3~12번 해설 문장, 영역별 상세 문구가 없는지 검색
+ *  - 무료 응답 본문에 3번 이후 해설 문장, 영역별 상세 문구가 없는지 검색
  *  - 요청 본문에 이용권 값을 넣어도 무시
  *  - 계정 삭제
  *  - 카카오 로그인 스위치: 켜진 빌드(이용권 켜짐, 카카오 꺼짐)의 dist에 카카오 버튼·안내 문구가 없는지
@@ -75,7 +75,7 @@ async function report(sess: Awaited<ReturnType<typeof newSession>>, auth?: strin
   return { status: res.status, text, json: JSON.parse(text) as ReportResponse & { error?: string } };
 }
 
-/** 무료 응답 본문에 있으면 안 되는 문구: 3~12번 해설 문장, 영역 설명, 수준 판정 사유, 틀린 패턴 설명 */
+/** 무료 응답 본문에 있으면 안 되는 문구: 3번 이후 해설 문장, 영역 설명, 수준 판정 사유, 틀린 패턴 설명 */
 function lockedNeedles(sess: Awaited<ReturnType<typeof newSession>>) {
   const full = composeReportResponse(score(sess.qs, sess.answers, sess.secs));
   const needles: string[] = [];
@@ -98,7 +98,9 @@ function checkFree(tag: string, r: Awaited<ReturnType<typeof report>>, sess: Awa
   ok(leaked.length === 0, `${tag}: 본문에 잠긴 문구 없음 (검사 ${needles.length}개, 발견 ${leaked.length}: ${leaked.slice(0, 2).join(' | ')})`);
   // 검사가 실제로 잡는지: 전체 응답에는 잠긴 문구가 들어 있어야 한다
   const fullText = JSON.stringify(full);
-  ok(needles.filter((n) => fullText.includes(n)).length > 10, `${tag}: (대조) 전체 응답에는 잠긴 문구가 들어 있음`);
+  // 영역별 상세마다 적어도 영역 설명·수준 판정 사유 두 문구가 있으므로 그만큼은 잡혀야 한다
+  const hits = needles.filter((n) => fullText.includes(n)).length;
+  ok(hits >= full.areaDetails.length * 2, `${tag}: (대조) 전체 응답에는 잠긴 문구가 들어 있음 (${hits}개)`);
 }
 
 try {
@@ -140,7 +142,7 @@ try {
     const full = composeReportResponse(score(s.qs, s.answers, s.secs));
     ok(r.status === 200 && r.json.gated === false, '켜짐 이용권 있음: gated=false');
     const { gated: _g, ...rest } = r.json;
-    ok(isDeepStrictEqual(rest, JSON.parse(JSON.stringify(full))), '켜짐 이용권 있음: 전체 응답(상세 4, 해설 12)');
+    ok(isDeepStrictEqual(rest, JSON.parse(JSON.stringify(full))), '켜짐 이용권 있음: 전체 응답(영역별 상세·해설 전체)');
 
     // 토큰 문제 → 401
     const cases: [string, string][] = [

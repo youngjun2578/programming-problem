@@ -2,7 +2,7 @@ import type { Rng } from './rng.js';
 import type { MistakeTag } from './mistakes.js';
 import type { ChartSpec, Figure } from '../../shared/charts/types.js';
 
-export type AreaId = 'arith' | 'stats' | 'chartRead' | 'chartMake';
+export type AreaId = 'programming' | 'sql';
 export type Difficulty = 1 | 2 | 3;
 
 export interface Wrong<V> {

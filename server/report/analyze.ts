@@ -64,7 +64,7 @@ export function judge(rate: number, avgSec: number, targetSec: number): { level:
 
 const LEVEL_ORDER: Record<Level, number> = { focus: 0, improve: 1, stable: 2 };
 
-/** areaMetas: 심화는 권장 시간·학습 순서가 다른 영역 메타를 넘긴다. 기본값은 이전과 같은 AREAS. */
+/** areaMetas: 권장 시간·학습 순서가 다른 영역 메타로 판정할 때 넘긴다. 기본값은 AREAS. */
 export function analyze(qs: Problem[], attempts: Attempt[], totalSec: number, areaMetas: AreaMeta[] = AREAS): Report {
   const areas: AreaReport[] = [];
   for (const meta of areaMetas) {

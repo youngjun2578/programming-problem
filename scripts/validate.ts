@@ -3,7 +3,7 @@
  *
  * 템플릿 단위: 각 템플릿을 PER_TEMPLATE번 생성해
  *   - 정답 존재(정확히 1개), 보기 5개·표시 중복 없음
- *   - 정답이 소수 첫째 자리 이내로 깔끔한 값인지
+ *   - 정답이 소수 첫째 자리 이내로 깔끔한 값인지(숫자 정답)
  *   - NaN·Infinity·음수·undefined 같은 비정상 값이 문장/보기/해설/도표에 없는지
  *   - 모든 오답에 mistakeTag가 붙었는지, 근접값 채움 비율이 낮은지
  *   - 문장 틀이 3가지 이상인지
@@ -16,17 +16,18 @@ import { Rng } from '../server/engine/rng.js';
 import { buildChoices, hasBadToken, isValidValue } from '../server/engine/choices.js';
 import { generateSet } from '../server/engine/set.js';
 import { hasAtMostDecimals, num } from '../server/engine/format.js';
-import { isFrac, fracLabel } from '../server/engine/frac.js';
 import { MISTAKES } from '../server/engine/mistakes.js';
 import { renderChart, renderTable } from '../shared/charts/render.js';
 import type { Figure } from '../shared/charts/types.js';
 import { analyze, judge } from '../server/report/analyze.js';
+import { PER_AREA } from '../server/diagnosis.js';
 
 const PER_TEMPLATE = Number(process.env.PER_TEMPLATE ?? 3000);
 const SETS = Number(process.env.SETS ?? 5000);
 /** 기본은 고정 시드(재현 가능). SEED_OFFSET=임의값 으로 다른 범위를 탐색할 수 있다. */
 const SEED_OFFSET = Number(process.env.SEED_OFFSET ?? 0);
-const MIN_TEMPLATES_PER_AREA = 5;
+/** 영역별 최소 유형 수. 세트가 영역마다 서로 다른 유형 PER_AREA개를 고르므로 그보다 적으면 세트를 만들 수 없다. */
+const MIN_TEMPLATES_PER_AREA = PER_AREA;
 const MAX_FILLER_RATE = 0.25;
 const MIN_PHRASINGS = 3;
 /** 단계별 구현 중에는 비어 있는 영역을 경고로만 처리한다. 모든 영역이 갖춰지면 true. */
@@ -39,6 +40,7 @@ const fail = (msg: string) => {
 
 function figureNumbers(f: Figure): number[] {
   if (f.kind === 'table') return f.table.rows.flat().filter((x): x is number => typeof x === 'number');
+  if (f.kind === 'code') return f.table ? f.table.rows.flat().filter((x): x is number => typeof x === 'number') : [];
   const s = f.spec;
   if (s.type === 'scatter') return [...s.xs, ...s.ys];
   return s.values;
@@ -48,17 +50,21 @@ function checkFigure(id: string, f: Figure) {
   for (const n of figureNumbers(f)) {
     if (!Number.isFinite(n) || n < 0) fail(`${id}: 도표에 비정상 수치 ${n}`);
   }
+  if (f.kind === 'code') {
+    // 코드는 음수·연산자가 정상적으로 들어갈 수 있으므로 비정상 값 이름만 본다
+    if (!f.code.trim()) fail(`${id}: 코드가 비어 있음`);
+    if (/NaN|Infinity|undefined|\[object/.test(f.code)) fail(`${id}: 코드에 비정상 값`);
+    if (f.table) checkFigure(id, { kind: 'table', table: f.table });
+    return;
+  }
   const html = f.kind === 'chart' ? renderChart(f.spec) : renderTable(f.table);
   if (hasBadToken(html.replace(/<[^>]+>/g, ' '))) fail(`${id}: 도표 텍스트에 비정상 값`);
   if (/NaN|undefined/.test(html)) fail(`${id}: 도표 SVG에 NaN/undefined`);
 }
 
-/** 숫자·이름을 지운 문장 뼈대. 서로 다른 뼈대 수 = 문장 틀 수 */
+/** 숫자·언어 이름을 지운 문장 뼈대. 서로 다른 뼈대 수 = 문장 틀 수 */
 function skeleton(text: string): string {
-  return text
-    .replace(/[\d,.]+/g, '#')
-    .replace(/(갑|을|A 사원|B 사원|민준|서연|김 주임|이 대리|도윤|하은)[은는이가과와을를의]?/g, '@')
-    .replace(/(소금|설탕)/g, '$');
+  return text.replace(/[\d,.]+/g, '#').replace(/C\+\+|\b(C|Python|Java)\b/g, '@');
 }
 
 console.log(`템플릿 ${TEMPLATES.length}개 × ${PER_TEMPLATE}회 생성 검사${SEED_OFFSET ? ` (SEED_OFFSET=${SEED_OFFSET})` : ''}`);
@@ -92,7 +98,7 @@ for (const tpl of TEMPLATES) {
     }
     if (!/[?.)]$/.test(g.text.trim())) fail(`${id}: 문장이 물음표/마침표로 끝나지 않음: ${g.text}`);
     // 해설에 정답 값이 실제로 나오는지 (해설과 정답의 불일치 방지)
-    const ansToken = typeof g.answer === 'number' ? num(g.answer) : isFrac(g.answer) ? fracLabel(g.answer) : typeof g.answer === 'string' ? g.answer : null;
+    const ansToken = typeof g.answer === 'number' ? num(g.answer) : typeof g.answer === 'string' ? g.answer : null;
     const stepsText = g.steps.join(' ');
     if (ansToken && !stepsText.includes(ansToken) && !stepsText.includes(g.format(g.answer)) && !g.chart) fail(`${id}: 해설에 정답 값(${ansToken})이 없음`);
     for (const s of g.steps) if (hasBadToken(s)) fail(`${id}: 해설에 비정상 값: ${s}`);
@@ -166,36 +172,36 @@ for (const a of AREAS) {
 if (new Set(TEMPLATES.map((t) => t.id)).size !== TEMPLATES.length) fail('템플릿 id 중복');
 
 // 세트
-console.log(`세트 ${SETS}개 생성 검사 (영역 ${activeAreas.length}개 × 3문항)`);
+console.log(`세트 ${SETS}개 생성 검사 (영역 ${activeAreas.length}개 × ${PER_AREA}문항)`);
 let setFail = 0;
 for (let s = 0; s < SETS; s++) {
   const seed = (s * 2654435761 + SEED_OFFSET) >>> 0;
   let set;
   try {
-    set = generateSet(TEMPLATES, seed, { areas: activeAreas.map((a) => a.id), perArea: 3 });
+    set = generateSet(TEMPLATES, seed, { areas: activeAreas.map((a) => a.id), perArea: PER_AREA });
   } catch (e) {
     fail(`세트 ${seed}: 생성 실패 ${(e as Error).message}`);
     setFail++;
     continue;
   }
-  if (set.length !== activeAreas.length * 3) fail(`세트 ${seed}: 문항 수 ${set.length}`);
+  if (set.length !== activeAreas.length * PER_AREA) fail(`세트 ${seed}: 문항 수 ${set.length}`);
   const texts = new Set(set.map((p) => p.text));
   if (texts.size !== set.length) fail(`세트 ${seed}: 같은 세트 내 문장 중복`);
   for (const a of activeAreas) {
     const ps = set.filter((p) => p.area === a.id);
-    if (ps.length !== 3) fail(`세트 ${seed}: ${a.name} ${ps.length}문항`);
+    if (ps.length !== PER_AREA) fail(`세트 ${seed}: ${a.name} ${ps.length}문항`);
     if (new Set(ps.map((p) => p.subtype)).size !== ps.length) fail(`세트 ${seed}: ${a.name} 유형 중복`);
   }
 }
 // 같은 시드 → 같은 세트 (재현성)
 const areas = activeAreas.map((a) => a.id);
-const a1 = JSON.stringify(generateSet(TEMPLATES, 42, { areas, perArea: 3 }));
-const a2 = JSON.stringify(generateSet(TEMPLATES, 42, { areas, perArea: 3 }));
+const a1 = JSON.stringify(generateSet(TEMPLATES, 42, { areas, perArea: PER_AREA }));
+const a2 = JSON.stringify(generateSet(TEMPLATES, 42, { areas, perArea: PER_AREA }));
 if (a1 !== a2) fail('같은 시드에서 다른 세트가 나옴 (재현성 실패)');
 
 // 리포트 분석 규칙
 {
-  const set = generateSet(TEMPLATES, 7, { areas, perArea: 3 });
+  const set = generateSet(TEMPLATES, 7, { areas, perArea: PER_AREA });
   const right = set.map((q) => ({ picked: q.answerIndex, sec: 30 }));
   const wrongPick = (q: (typeof set)[number]) => (q.answerIndex + 1) % 5;
   const allRight = analyze(set, right, 360);
@@ -210,12 +216,14 @@ if (a1 !== a2) fail('같은 시드에서 다른 세트가 나옴 (재현성 실�
     if (new Set(a.study.map((s) => s.subtype)).size !== a.meta.studyOrder.length) fail(`리포트: ${a.meta.name} 학습 순서 누락/중복`);
   }
 
-  // 첫 영역만 1문항 틀림 → 보완 필요, 우선순위 맨 앞
+  // 첫 영역만 1문항 틀림 → 그 영역 수준이 판정 규칙대로 내려가고, 우선순위 맨 앞
   const firstArea = set[0].area;
   const oneWrong = set.map((q, i) => ({ picked: i === 0 ? wrongPick(q) : q.answerIndex, sec: 30 }));
   const r1 = analyze(set, oneWrong, 360);
   const a1 = r1.areas.find((a) => a.meta.id === firstArea)!;
-  if (a1.level !== 'improve') fail(`리포트: 3문항 중 2문항 정답이면 보완 필요여야 함 (${a1.level})`);
+  const want1 = judge((PER_AREA - 1) / PER_AREA, 30, a1.meta.targetSec).level;
+  if (a1.level !== want1) fail(`리포트: ${PER_AREA}문항 중 1문항 오답이면 ${want1}여야 함 (${a1.level})`);
+  if (judge(2 / 3, 30, 75).level !== 'improve') fail('리포트: 3문항 중 2문항 정답이면 보완 필요여야 함');
   if (r1.priority[0].meta.id !== firstArea) fail('리포트: 학습 우선순위가 수준 낮은 영역부터가 아님');
   if (a1.patterns[0]?.tag !== set[0].choices[wrongPick(set[0])].mistakeTag) fail('리포트: 틀린 패턴이 고른 보기의 mistakeTag와 다름');
 

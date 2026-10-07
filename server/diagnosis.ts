@@ -9,18 +9,21 @@ import { analyze, LEVEL_LABEL, type Report } from './report/analyze.js';
 import type { Explanation, PublicChoice, PublicQuestion, ReportResponse } from '../shared/api.js';
 import { FREE_EXPLANATION_COUNT } from '../shared/product.js';
 import type { DiagnosisLevel } from '../shared/api.js';
-import { ADVANCED_TEMPLATES } from './advanced/registry.js';
-import { generateAdvancedSet } from './advanced/set.js';
-import { ADVANCED_AREAS } from './advanced/areas.js';
-import { ADVANCED_PER_AREA } from './advanced/constants.js';
 
-export const PER_AREA = 3;
+/**
+ * 영역별 문항 수. 세트는 영역 안에서 서로 다른 유형만 고르므로 유형 수보다 클 수 없다.
+ * 지금은 영역마다 임시 샘플 유형이 하나뿐이라 1문항이다. 유형을 늘리면 함께 올린다.
+ */
+export const PER_AREA = 1;
 const AREA_IDS = AREAS.filter((a) => TEMPLATES.some((t) => t.area === a.id)).map((a) => a.id);
 export const QUESTION_COUNT = AREA_IDS.length * PER_AREA;
 
-/** level을 주지 않으면 이전과 같은 기본 세트. 심화도 영역별 3문항(12문항)이라 QUESTION_COUNT가 같다. */
-export function generateQuestions(genSeed: number, level: DiagnosisLevel = 'basic'): Problem[] {
-  if (level === 'advanced') return generateAdvancedSet(ADVANCED_TEMPLATES, genSeed, { areas: AREA_IDS, perArea: ADVANCED_PER_AREA });
+/**
+ * level을 주지 않으면 기본 세트.
+ * 심화 전용 템플릿은 아직 없다. 심화 스위치(ADVANCED_LEVEL_ENABLED)를 켜면 임시로 기본과 같은 템플릿을 쓰며,
+ * 생성 시드가 따로라(server/token.ts의 generationSeed) 같은 공개 시드에서도 다른 문항이 나온다. 문항 수는 기본과 같다.
+ */
+export function generateQuestions(genSeed: number, _level: DiagnosisLevel = 'basic'): Problem[] {
   return generateSet(TEMPLATES, genSeed, { areas: AREA_IDS, perArea: PER_AREA });
 }
 
@@ -49,8 +52,8 @@ export function score(qs: Problem[], answers: number[], secs: number[], level: D
   const attempts = answers.map((picked, i) => ({ picked, sec: secs[i] }));
   // 총 풀이 시간 = 문항별 시간 합의 반올림 (이전 브라우저 계산과 같은 기준)
   const totalSec = Math.round(secs.reduce((a, b) => a + b, 0));
-  // 심화는 권장 시간·학습 순서만 심화용 영역 메타로 판정한다(판정 규칙은 같음)
-  if (level === 'advanced') return { qs, answers, report: analyze(qs, attempts, totalSec, ADVANCED_AREAS), level: 'advanced' };
+  // 심화도 판정 규칙과 영역 메타(권장 시간·학습 순서)는 기본과 같다. 응답에 심화 표시만 붙인다.
+  if (level === 'advanced') return { qs, answers, report: analyze(qs, attempts, totalSec), level: 'advanced' };
   return { qs, answers, report: analyze(qs, attempts, totalSec) };
 }
 

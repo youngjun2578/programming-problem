@@ -1,5 +1,5 @@
 /**
- * 골든 스냅샷 비교: 서버 코드의 출력이 이전 전 기준값(tests/golden/golden.jsonl.gz)과 같은지 본다.
+ * 골든 스냅샷 비교: 서버 코드의 출력이 기준값(tests/golden/golden.jsonl.gz, scripts/golden.ts로 생성)과 같은지 본다.
  *   npx tsx scripts/golden-compare.ts      (다르면 목록을 출력하고 exit 1)
  *
  * 비교 대상

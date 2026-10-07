@@ -22,7 +22,8 @@ export const CONTENT_DIR = 'content/guides';
 /** 생성 HTML을 두는 곳(프로젝트 루트 기준). .gitignore에 있음 */
 export const OUT_DIR = 'guide';
 
-const AREA_NAMES = ['기초연산', '기초통계', '도표분석', '도표작성', '종합'] as const;
+/** 가이드 분류: 영역 이름(server/areas.ts) + 종합 */
+const AREA_NAMES: readonly string[] = [...AREAS.map((a) => a.name), '종합'];
 const CIRC = '①②③④⑤';
 const SITE = 'NCS 수리능력 진단';
 
@@ -30,7 +31,7 @@ export interface Guide {
   slug: string;
   title: string;
   description: string;
-  area: (typeof AREA_NAMES)[number];
+  area: string;
   status: 'draft' | 'published';
   updated: string;
   related: string[];
@@ -73,7 +74,7 @@ export function parseGuide(file: string, text: string): Guide {
     slug: meta.slug,
     title: meta.title,
     description: meta.description,
-    area: meta.area as Guide['area'],
+    area: meta.area,
     status: meta.status as Guide['status'],
     updated: meta.updated,
     related,
@@ -283,7 +284,8 @@ ${html}
 }
 
 function indexPage(list: Guide[], dev: boolean): string {
-  const order = [...AREA_NAMES.slice(4), ...AREA_NAMES.slice(0, 4)];
+  // 종합 글을 먼저, 그다음 영역 순서
+  const order = ['종합', ...AREA_NAMES.filter((a) => a !== '종합')];
   const groups = order
     .map((area) => [area, list.filter((g) => g.area === area)] as const)
     .filter(([, gs]) => gs.length)

@@ -1,7 +1,6 @@
 import type { Rng } from './rng.js';
 import type { Choice, Generated } from './types.js';
 import { hasAtMostDecimals } from './format.js';
-import { isFrac, isProb } from './frac.js';
 
 const CHOICE_COUNT = 5;
 
@@ -9,7 +8,6 @@ const CHOICE_COUNT = 5;
 export function isValidValue(v: unknown): boolean {
   if (typeof v === 'number') return Number.isFinite(v) && v > 0 && hasAtMostDecimals(v, 2);
   if (typeof v === 'string') return v.trim().length > 0;
-  if (isFrac(v)) return isProb(v);
   return v !== null && v !== undefined;
 }
 

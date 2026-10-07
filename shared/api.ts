@@ -4,7 +4,7 @@
  */
 import type { ChartSpec, Figure } from './charts/types.js';
 
-export type AreaId = 'arith' | 'stats' | 'chartRead' | 'chartMake';
+export type AreaId = 'programming' | 'sql';
 export type Level = 'stable' | 'improve' | 'focus';
 
 /** 풀이 화면에 보이는 보기. 정답 여부나 실수 유형은 담지 않는다. */

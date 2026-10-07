@@ -178,7 +178,14 @@ export function renderTable(t: TableSpec): string {
 
 const NOTE = '<span class="fig-note">연습용 가상 자료</span>';
 
+/** 코드 조각: 공백과 줄 바꿈을 그대로 보여 준다 */
+export function renderCode(lang: string, code: string): string {
+  return `<pre class="code-block" data-lang="${esc(lang)}"><code>${esc(code)}</code></pre>`;
+}
+
 export function renderFigure(f: Figure): string {
+  if (f.kind === 'code')
+    return `<figure class="figure figure-code"><figcaption><span class="fig-title">${esc(f.lang)}</span></figcaption>${f.table ? renderTable(f.table) : ''}${renderCode(f.lang, f.code)}</figure>`;
   if (f.kind === 'table') return `<figure class="figure">${renderTable(f.table)}<p class="fig-foot">${NOTE}</p></figure>`;
   const unit = f.spec.type === 'pie' && f.spec.unit ? ` <span class="unit">(단위: ${esc(f.spec.unit)})</span>` : '';
   const title = `<figcaption>${f.spec.title ? `<span class="fig-title">${esc(f.spec.title)}</span>${unit}` : ''}${NOTE}</figcaption>`;

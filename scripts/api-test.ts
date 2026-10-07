@@ -18,7 +18,8 @@ import { handleReport, handleSession } from '../server/handlers.js';
 import { generationSeed, issueToken, nowSec, TOKEN_TTL_SEC, verifyToken } from '../server/token.js';
 import { composeReportResponse, generateQuestions, QUESTION_COUNT, score, toPublicQuestion } from '../server/diagnosis.js';
 import { monetizationEnabled } from '../server/config.js';
-import { ADVANCED_TARGET_SEC } from '../server/advanced/constants.js';
+import { AREAS, AREA_BY_ID } from '../server/areas.js';
+import { FREE_EXPLANATION_COUNT } from '../shared/product.js';
 import { MISTAKES } from '../server/engine/mistakes.js';
 import type { ReportResponse, SessionResponse } from '../shared/api.js';
 
@@ -71,6 +72,9 @@ function answersFor(token: string) {
 }
 
 const secs12 = (s = 10) => Array(QUESTION_COUNT).fill(s);
+/** 영역 수와 무료 응답의 해설 수(문항이 적으면 전체) */
+const AREA_COUNT = AREAS.length;
+const FREE_EXPLAINED = Math.min(FREE_EXPLANATION_COUNT, QUESTION_COUNT);
 
 async function main() {
   // 1. 비밀 값 없음 / 짧음
@@ -90,7 +94,7 @@ async function main() {
   const raw = await sr.text();
   const session = JSON.parse(raw) as SessionResponse;
   ok(JSON.stringify(Object.keys(session).sort()) === JSON.stringify(['expiresAt', 'questions', 'token']), `세션 최상위 키 ${Object.keys(session)}`);
-  ok(session.questions.length === QUESTION_COUNT, '세션 문항 12개');
+  ok(session.questions.length === QUESTION_COUNT, `세션 문항 ${QUESTION_COUNT}개`);
   const allowedQ = new Set(['area', 'areaName', 'text', 'figure', 'choices']);
   const allowedC = new Set(['label', 'chart']);
   ok(session.questions.every((q) => Object.keys(q).every((k) => allowedQ.has(k))), '문항 키는 area·areaName·text·figure·choices만');
@@ -105,15 +109,17 @@ async function main() {
   const body = JSON.parse(Buffer.from(session.token.split('.')[0], 'base64url').toString());
   ok(JSON.stringify(Object.keys(body).sort()) === JSON.stringify(['iat', 's', 'v']), `토큰 본문 키 v·s·iat (${Object.keys(body)})`);
   ok(Math.abs(Date.parse(session.expiresAt) / 1000 - (body.iat + TOKEN_TTL_SEC)) < 1, 'expiresAt = 발급 + 6시간');
-  ok(generateQuestions(body.s)[0].text !== session.questions[0].text || generateQuestions(body.s)[1].text !== session.questions[1].text, '토큰의 공개 시드로는 같은 문항이 나오지 않음(키 필요)');
+  ok(JSON.stringify(generateQuestions(body.s).map(toPublicQuestion)) !== JSON.stringify(session.questions), '토큰의 공개 시드로는 같은 문항이 나오지 않음(키 필요)');
 
   // 정답 위치 분포: 세션 여러 개에서 정답 번호가 한쪽으로 쏠리지 않는다
+  // 문항 수와 관계없이 정답 약 720개를 모은다(위치마다 기대 20%, 10% 이하면 실패)
   const dist = [0, 0, 0, 0, 0];
-  for (let i = 0; i < 60; i++) {
+  const sessions = Math.ceil(720 / QUESTION_COUNT);
+  for (let i = 0; i < sessions; i++) {
     const s = (await (await post(handleSession, {})).json()) as SessionResponse;
     answersFor(s.token).forEach((a) => dist[a]++);
   }
-  ok(dist.every((n) => n > 60 * 12 * 0.1), `정답 위치 분포 고름 ${dist}`);
+  ok(dist.every((n) => n > sessions * QUESTION_COUNT * 0.1), `정답 위치 분포 고름 ${dist}`);
 
   // 3. 정상 채점
   const answers = answersFor(session.token);
@@ -122,13 +128,17 @@ async function main() {
   const rep = (await good.json()) as ReportResponse;
   if (MON) ok(JSON.stringify(Object.keys(rep)) === JSON.stringify(['gated', 'meta', 'summary', 'areaDetails', 'explanations']) && rep.gated === true, '[이용권 켜짐] 응답 구역 gated(true)·meta·summary·areaDetails·explanations');
   else ok(JSON.stringify(Object.keys(rep)) === JSON.stringify(['meta', 'summary', 'areaDetails', 'explanations']), '응답 구역 meta·summary·areaDetails·explanations');
-  ok(rep.meta.correct === 12 && rep.meta.total === 12 && rep.meta.totalSec === 120, `전부 정답 채점 ${JSON.stringify(rep.meta)}`);
-  if (MON) ok(rep.summary.length === 4 && rep.areaDetails.length === 0 && rep.explanations.length === 2, '[이용권 켜짐] 무료 구역 크기 4·0·2(요약 전체, 상세 없음, 해설 1·2번)');
-  else ok(rep.summary.length === 4 && rep.areaDetails.length === 4 && rep.explanations.length === 12, '구역 크기 4·4·12');
+  ok(rep.meta.correct === QUESTION_COUNT && rep.meta.total === QUESTION_COUNT && rep.meta.totalSec === QUESTION_COUNT * 10, `전부 정답 채점 ${JSON.stringify(rep.meta)}`);
+  if (MON)
+    ok(
+      rep.summary.length === AREA_COUNT && rep.areaDetails.length === 0 && rep.explanations.length === FREE_EXPLAINED,
+      `[이용권 켜짐] 무료 구역 크기 ${AREA_COUNT}·0·${FREE_EXPLAINED}(요약 전체, 상세 없음, 해설 앞 ${FREE_EXPLANATION_COUNT}문항까지)`,
+    );
+  else ok(rep.summary.length === AREA_COUNT && rep.areaDetails.length === AREA_COUNT && rep.explanations.length === QUESTION_COUNT, `구역 크기 ${AREA_COUNT}·${AREA_COUNT}·${QUESTION_COUNT}`);
 
   // 클라이언트가 보낸 점수·정답 여부는 무시
   const wrongAnswers = answers.map((a) => (a + 1) % 5);
-  const cheat = await post(handleReport, { token: session.token, answers: wrongAnswers, secs: secs12(), score: 12, correct: 12, isCorrect: Array(12).fill(true) });
+  const cheat = await post(handleReport, { token: session.token, answers: wrongAnswers, secs: secs12(), score: QUESTION_COUNT, correct: QUESTION_COUNT, isCorrect: Array(QUESTION_COUNT).fill(true) });
   const cheatRep = (await cheat.json()) as ReportResponse;
   ok(cheat.status === 200 && cheatRep.meta.correct === 0, '클라이언트가 보낸 score·isCorrect 무시 (0점)');
 
@@ -159,9 +169,9 @@ async function main() {
 
   // 5. 입력 검증
   const bad: [string, unknown, string][] = [
-    ['답 11개', { token: session.token, answers: answers.slice(0, 11), secs: secs12() }, '400:bad_request'],
-    ['답 13개', { token: session.token, answers: [...answers, 0], secs: secs12() }, '400:bad_request'],
-    ['시간 11개', { token: session.token, answers, secs: secs12().slice(0, 11) }, '400:bad_request'],
+    [`답 ${QUESTION_COUNT - 1}개`, { token: session.token, answers: answers.slice(0, QUESTION_COUNT - 1), secs: secs12() }, '400:bad_request'],
+    [`답 ${QUESTION_COUNT + 1}개`, { token: session.token, answers: [...answers, 0], secs: secs12() }, '400:bad_request'],
+    [`시간 ${QUESTION_COUNT - 1}개`, { token: session.token, answers, secs: secs12().slice(0, QUESTION_COUNT - 1) }, '400:bad_request'],
     ['답 5 (범위 밖)', { token: session.token, answers: [5, ...answers.slice(1)], secs: secs12() }, '400:bad_request'],
     ['답 -1', { token: session.token, answers: [-1, ...answers.slice(1)], secs: secs12() }, '400:bad_request'],
     ['답 1.5', { token: session.token, answers: [1.5, ...answers.slice(1)], secs: secs12() }, '400:bad_request'],
@@ -171,7 +181,7 @@ async function main() {
     ['시간 null(NaN)', { token: session.token, answers, secs: [null, ...secs12().slice(1)] }, '400:bad_request'],
     ['시간 문자열', { token: session.token, answers, secs: ['10', ...secs12().slice(1)] }, '400:bad_request'],
     ['시간 6시간 초과', { token: session.token, answers, secs: [TOKEN_TTL_SEC + 1, ...secs12(0).slice(1)] }, '400:bad_request'],
-    ['시간 합이 경과 시간보다 김', { token: session.token, answers, secs: secs12(1000) }, '400:bad_request'],
+    ['시간 합이 경과 시간보다 김', { token: session.token, answers, secs: secs12(Math.ceil(12000 / QUESTION_COUNT)) }, '400:bad_request'],
     ['token 없음', { answers, secs: secs12() }, '400:bad_request'],
     ['배열 본문', [1, 2, 3], '400:bad_request'],
     ['JSON 아님', 'not json', '400:bad_request'],
@@ -230,7 +240,7 @@ async function main() {
     const adv = (await advRes.json()) as SessionResponse;
     const advBody = decode(adv.token);
     ok(advRes.status === 200 && advBody.l === 'adv' && JSON.stringify(Object.keys(advBody)) === JSON.stringify(['v', 's', 'iat', 'l']), `심화: 켜짐 + advanced → 토큰 {v,s,iat,l:"adv"} (${JSON.stringify(Object.keys(advBody))})`);
-    ok(adv.questions.length === QUESTION_COUNT, `심화: 12문항 (${adv.questions.length})`);
+    ok(adv.questions.length === QUESTION_COUNT, `심화: ${QUESTION_COUNT}문항 (${adv.questions.length})`);
     ok(JSON.stringify(adv.questions) === JSON.stringify(generateQuestions(generationSeed(SECRET, advBody.s, 'advanced'), 'advanced').map(toPublicQuestion)), '심화: 심화 시드(gen:v1:adv)로 만든 문항');
     ok(JSON.stringify(adv.questions) !== JSON.stringify(generateQuestions(generationSeed(SECRET, advBody.s)).map(toPublicQuestion)), '심화: 같은 공개 시드의 기본 문항과 다름');
     ok(generationSeed(SECRET, 123, 'advanced') !== generationSeed(SECRET, 123), '심화: 생성 시드 이름표가 다름');
@@ -244,10 +254,11 @@ async function main() {
     const advRep = await post(handleReport, { token: adv.token, answers: advAns, secs: secs12(), level: 'basic' });
     const advJson = (await advRep.json()) as ReportResponse;
     ok(advRep.status === 200 && advJson.meta.level === 'advanced' && advJson.meta.correct === QUESTION_COUNT, `심화: 심화 토큰 + 본문 level basic → 심화로 채점 (${advJson.meta.level}, ${advJson.meta.correct})`);
-    ok(advJson.areaDetails.every((a) => a.targetSec === ADVANCED_TARGET_SEC[a.areaId as keyof typeof ADVANCED_TARGET_SEC]), '심화: 권장 시간은 심화용 상수');
+    // 심화 전용 권장 시간은 아직 없다(기본 영역 메타와 같음)
+    ok(advJson.areaDetails.every((a) => a.targetSec === AREA_BY_ID[a.areaId].targetSec), '심화: 권장 시간은 영역 메타 값');
     const advQs = generateQuestions(generationSeed(SECRET, advBody.s, 'advanced'), 'advanced');
     if (MON)
-      ok(JSON.stringify(advJson) === JSON.stringify(composeReportResponse(score(advQs, advAns, secs12(), 'advanced'), 'free')) && advJson.gated === true && advJson.explanations.length === 2, '[이용권 켜짐] 심화: 응답 = 심화 채점 결과의 무료 범위(기본과 같은 규칙)');
+      ok(JSON.stringify(advJson) === JSON.stringify(composeReportResponse(score(advQs, advAns, secs12(), 'advanced'), 'free')) && advJson.gated === true && advJson.explanations.length === FREE_EXPLAINED, '[이용권 켜짐] 심화: 응답 = 심화 채점 결과의 무료 범위(기본과 같은 규칙)');
     else ok(JSON.stringify(advJson) === JSON.stringify(composeReportResponse(score(advQs, advAns, secs12(), 'advanced'))), '심화: 응답 = 심화 채점 결과 그대로');
     const basicAns = answersOf(basicOn.token, 'basic');
     const basicRep = await post(handleReport, { token: basicOn.token, answers: basicAns, secs: secs12(), level: 'advanced' });
