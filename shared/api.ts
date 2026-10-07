@@ -3,6 +3,7 @@
  * 타입만 있으므로 브라우저 번들에는 아무것도 들어가지 않는다.
  */
 import type { ChartSpec, Figure } from './charts/types.js';
+import type { LanguageId } from './languages.js';
 
 export type AreaId = 'programming' | 'sql';
 export type Level = 'stable' | 'improve' | 'focus';
@@ -26,8 +27,9 @@ export interface PublicQuestion {
 /** 진단 수준. basic이 이전부터 있던 진단, advanced는 심화(서버 스위치가 켜졌을 때만). */
 export type DiagnosisLevel = 'basic' | 'advanced';
 
-/** POST /api/session 요청 본문(선택). 없거나 level이 없으면 기본. */
+/** POST /api/session 요청 본문. lang(프로그래밍 언어)은 꼭 있어야 하고, level이 없으면 기본. */
 export interface SessionRequest {
+  lang: LanguageId;
   level?: DiagnosisLevel;
 }
 
@@ -109,6 +111,8 @@ export interface ReportResponse {
     correct: number;
     totalSec: number;
     perArea: number;
+    /** 진단을 시작할 때 고른 프로그래밍 언어(서명된 토큰에서 나온 값) */
+    language: { id: LanguageId; name: string };
     /** 심화일 때만 "advanced". 기본 응답에는 이 필드가 없다(이전과 같음). */
     level?: 'advanced';
   };

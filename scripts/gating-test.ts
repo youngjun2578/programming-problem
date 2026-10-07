@@ -53,16 +53,20 @@ function offEnv() {
   delete process.env.SUPABASE_SERVICE_ROLE_KEY;
 }
 
+/** 세션마다 언어를 돌아가며 고른다(어느 언어든 응답 나누기 규칙은 같다) */
+const LANGS = ['c', 'cpp', 'python', 'java'] as const;
+let sessionCount = 0;
 async function newSession() {
-  const r = await handleSession(new Request('http://x/api/session', { method: 'POST' }));
+  const lang = LANGS[sessionCount++ % LANGS.length];
+  const r = await handleSession(new Request('http://x/api/session', { method: 'POST', body: JSON.stringify({ lang }) }));
   const s = (await r.json()) as SessionResponse;
   const v = verifyToken(SECRET, s.token);
   if (!v.ok) throw new Error('세션 토큰 오류');
-  const qs = generateQuestions(generationSeed(SECRET, v.body.s));
+  const qs = generateQuestions(generationSeed(SECRET, v.body.s, lang), lang);
   // 섞어서: 영역마다 맞힘·틀림이 섞이고 틀린 패턴 문구가 생기게
   const answers = qs.map((q, i) => (i % 3 === 0 ? (q.answerIndex + 1) % q.choices.length : q.answerIndex));
   const secs = qs.map(() => 0.5);
-  return { status: r.status, token: s.token, qs, answers, secs };
+  return { status: r.status, token: s.token, lang, qs, answers, secs };
 }
 
 async function report(sess: Awaited<ReturnType<typeof newSession>>, auth?: string, extra: Record<string, unknown> = {}) {
@@ -77,7 +81,7 @@ async function report(sess: Awaited<ReturnType<typeof newSession>>, auth?: strin
 
 /** 무료 응답 본문에 있으면 안 되는 문구: 3번 이후 해설 문장, 영역 설명, 수준 판정 사유, 틀린 패턴 설명 */
 function lockedNeedles(sess: Awaited<ReturnType<typeof newSession>>) {
-  const full = composeReportResponse(score(sess.qs, sess.answers, sess.secs));
+  const full = composeReportResponse(score(sess.qs, sess.answers, sess.secs, sess.lang));
   const needles: string[] = [];
   sess.qs.slice(2).forEach((q) => needles.push(...q.steps));
   AREAS.forEach((a) => needles.push(a.description));
@@ -111,7 +115,7 @@ try {
     ok(s.status === 200, '꺼짐: 세션 200');
     for (const auth of [undefined, `Bearer ${userToken('google')}`, 'Bearer garbage', 'Basic xyz']) {
       const r = await report(s, auth);
-      const expected = composeReportResponse(score(s.qs, s.answers, s.secs));
+      const expected = composeReportResponse(score(s.qs, s.answers, s.secs, s.lang));
       ok(r.status === 200 && isDeepStrictEqual(r.json, JSON.parse(JSON.stringify(expected))), `꺼짐: 로그인 헤더(${auth?.slice(0, 12) ?? '없음'}) 무시, 전체 응답 동일`);
       ok(!('gated' in r.json) && JSON.stringify(Object.keys(r.json)) === JSON.stringify(['meta', 'summary', 'areaDetails', 'explanations']), '꺼짐: gated 필드 없음, 키 순서 이전과 같음');
     }
@@ -139,7 +143,7 @@ try {
 
     await setMock({ entitled: { [MOCK_USERS.google.id]: true } });
     const r = await report(s, `Bearer ${userToken('google')}`);
-    const full = composeReportResponse(score(s.qs, s.answers, s.secs));
+    const full = composeReportResponse(score(s.qs, s.answers, s.secs, s.lang));
     ok(r.status === 200 && r.json.gated === false, '켜짐 이용권 있음: gated=false');
     const { gated: _g, ...rest } = r.json;
     ok(isDeepStrictEqual(rest, JSON.parse(JSON.stringify(full))), '켜짐 이용권 있음: 전체 응답(영역별 상세·해설 전체)');

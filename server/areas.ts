@@ -11,14 +11,8 @@ export interface AreaMeta {
   targetSec: number;
 }
 
-/** 프로그래밍 영역에서 다루는 언어. 문항마다 이 가운데 하나로 코드를 보여 준다. */
-export const LANGUAGES = [
-  { id: 'c', name: 'C' },
-  { id: 'cpp', name: 'C++' },
-  { id: 'python', name: 'Python' },
-  { id: 'java', name: 'Java' },
-] as const;
-export type LanguageId = (typeof LANGUAGES)[number]['id'];
+/** 프로그래밍 영역의 언어. 사용자가 진단을 시작할 때 하나를 고르고, 프로그래밍 문항은 그 언어로만 낸다. */
+export { LANGUAGES, type LanguageId } from '../shared/languages.js';
 
 /*
  * 영역 구성만 정해 둔 뼈대다. 지금 유형은 임시 샘플 하나씩뿐이므로(server/registry.ts),

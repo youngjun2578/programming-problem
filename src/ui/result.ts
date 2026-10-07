@@ -102,6 +102,7 @@ export function renderResult(app: HTMLElement, res: ReportResponse, retry: () =>
       <h1 class="title">${esc(SITE_NAME)} 리포트</h1>
       <dl class="meta">
         <div><dt>진단 일시</dt><dd>${when}</dd></div>
+        <div><dt>언어</dt><dd>${esc(r.language.name)}</dd></div>
         <div><dt>문항 구성</dt><dd>${r.total}문항 (영역별 ${perArea}문항)</dd></div>
         <div><dt>총 풀이 시간</dt><dd class="num">${fmtDuration(r.totalSec)}</dd></div>
         <div><dt>참고 점수</dt><dd class="num">${r.correct} / ${r.total}</dd></div>

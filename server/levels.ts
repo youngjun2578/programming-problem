@@ -7,6 +7,9 @@
  *   "이용권 전용"으로 바꿀 때는 이 함수만 고친다(예: server/accounts.ts로 토큰·이용권 확인).
  */
 import type { DiagnosisLevel } from '../shared/api.js';
+import { isLanguageId, LANGUAGE_IDS, type LanguageId } from '../shared/languages.js';
+
+export { LANGUAGE_IDS };
 
 export type { DiagnosisLevel };
 
@@ -36,4 +39,14 @@ export function parseLevel(body: unknown): { ok: true; level: DiagnosisLevel } |
   const v = (body as { level: unknown }).level;
   if (v === 'basic' || v === 'advanced') return { ok: true, level: v };
   return { ok: false };
+}
+
+/**
+ * 세션 요청 본문에서 프로그래밍 언어를 읽는다. 언어는 꼭 있어야 한다.
+ * 없거나 모르는 값이면 오류: 조용히 다른 언어로 바꾸면 사용자가 고르지 않은 언어의 문제가 나간다.
+ */
+export function parseLang(body: unknown): { ok: true; lang: LanguageId } | { ok: false } {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return { ok: false };
+  const v = (body as { lang?: unknown }).lang;
+  return isLanguageId(v) ? { ok: true, lang: v } : { ok: false };
 }

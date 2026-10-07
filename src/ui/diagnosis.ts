@@ -1,12 +1,13 @@
 import '../styles/main.css';
 import type { ReportResponse } from '../../shared/api';
+import { isLanguageId, LANGUAGES, type LanguageId } from '../../shared/languages';
 import { ApiFailure, requestReport, startSession } from './api';
 import { esc } from './dom';
 import { runTest } from './test';
 import { renderResult } from './result';
 
 /*
- * 진단 흐름: 세션 요청(문제만 받음) → 풀이 → 채점 요청 → 결과.
+ * 진단 흐름: 언어 선택 → 세션 요청(문제만 받음) → 풀이 → 채점 요청 → 결과.
  * 문제 생성·채점·리포트 계산은 모두 서버(api/)에서 한다.
  */
 
@@ -47,6 +48,47 @@ const goHome = () => {
 };
 
 /*
+ * 프로그래밍 언어. 고른 값은 주소(?lang=python)에만 남긴다(브라우저 저장소는 쓰지 않는다).
+ * 새로 고치거나 "새 문제로 진단"을 눌러도 같은 언어로 시작하고, 주소에 없거나 모르는 값이면 선택 화면을 먼저 보여 준다.
+ */
+function langFromUrl(): LanguageId | null {
+  const v = new URLSearchParams(window.location.search).get('lang');
+  return isLanguageId(v) ? v : null;
+}
+let lang: LanguageId | null = langFromUrl();
+
+function setLang(next: LanguageId | null) {
+  lang = next;
+  const url = new URL(window.location.href);
+  if (next) url.searchParams.set('lang', next);
+  else url.searchParams.delete('lang');
+  window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+}
+
+/** 언어 선택 화면. 고르면 바로 진단을 시작한다. */
+function renderLanguagePicker() {
+  ++generation;
+  setTesting(false);
+  app.innerHTML = `
+  <main class="page" id="main">
+    <p class="eyebrow">진단 시작</p>
+    <h1 class="title" tabindex="-1">프로그래밍 언어 선택</h1>
+    <p class="lead">프로그래밍 문항을 풀 언어를 하나 고르세요. 프로그래밍 문항은 고른 언어로만 나오고, SQL 문항은 언어와 관계없이 함께 나옵니다.</p>
+    <div class="actions lang-picker" role="group" aria-label="프로그래밍 언어">
+      ${LANGUAGES.map((l) => `<button type="button" class="btn-secondary" data-lang="${l.id}">${esc(l.name)}</button>`).join('')}
+    </div>
+  </main>`;
+  app.querySelectorAll<HTMLButtonElement>('[data-lang]').forEach((b) =>
+    b.addEventListener('click', () => {
+      setLang(b.dataset.lang as LanguageId);
+      void start();
+    }),
+  );
+  (app.querySelector('.title') as HTMLElement).focus({ preventScroll: true });
+  window.scrollTo(0, 0);
+}
+
+/*
  * 이용권 기능(스위치가 켜진 빌드에서만). 꺼진 빌드에서는 mon이 null이고 아래 분기는 모두 건너뛴다.
  */
 type Mon = typeof import('./monetization');
@@ -82,13 +124,15 @@ async function mayStart(my: number): Promise<boolean> {
 }
 
 async function start() {
+  const chosen = lang;
+  if (!chosen) return renderLanguagePicker();
   const my = ++generation;
   setTesting(false);
   if (!(await mayStart(my)) || my !== generation) return;
   showStatus('문제를 준비하고 있습니다…');
   let session;
   try {
-    session = await (adv ? (await adv).requestSession() : startSession());
+    session = await (adv ? (await adv).requestSession(chosen) : startSession(chosen));
   } catch (e) {
     if (my !== generation) return;
     if (adv && e instanceof ApiFailure && e.code === 'level_unavailable') {
@@ -158,6 +202,9 @@ async function submit(my: number, token: string, answers: number[], secs: number
   }
   if (my !== generation) return;
   renderResult(app, res, start);
+  // 다음 "새 문제로 진단"은 서버가 알려 준(서명된 토큰의) 언어로 시작한다
+  setLang(res.meta.language.id);
+  addChangeLanguage();
   if (adv) (await adv).decorateResult(app, res, start);
   if (m) {
     // 채점 결과를 정상적으로 받은 시점에 무료 진단 사용 표시를 남긴다(이 브라우저에만)
@@ -167,7 +214,21 @@ async function submit(my: number, token: string, answers: number[], secs: number
   }
 }
 
-/** 첫 화면: 이용권 구매 버튼으로 로그인했다가 돌아왔으면 구매 화면, 아니면 진단 시작 */
+/** 결과 화면의 "다른 언어로 진단" 버튼: 언어 선택 화면으로 */
+function addChangeLanguage() {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn-secondary';
+  btn.id = 'change-lang';
+  btn.textContent = '다른 언어로 진단';
+  btn.addEventListener('click', () => {
+    setLang(null);
+    renderLanguagePicker();
+  });
+  app.querySelector('#retry')?.insertAdjacentElement('afterend', btn);
+}
+
+/** 첫 화면: 이용권 구매 버튼으로 로그인했다가 돌아왔으면 구매 화면, 아니면 진단 시작(언어를 아직 고르지 않았으면 선택 화면) */
 async function boot() {
   if (mon) {
     const m = await mon;

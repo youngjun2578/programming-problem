@@ -1,8 +1,8 @@
 /**
  * 임시 샘플: 반복문 출력 맞히기. 화면·서버·채점이 끊기지 않게 하려고 둔 문항이며 실제 문제 템플릿으로 바꿀 예정이다.
- * 언어(C·C++·Python·Java) 하나를 골라 "범위 안에서 K의 배수만 더해 출력"하는 코드를 보여 주고 출력값을 묻는다.
+ * 사용자가 고른 언어(C·C++·Python·Java)로 "범위 안에서 K의 배수만 더해 출력"하는 코드를 보여 주고 출력값을 묻는다.
  */
-import type { Template, Wrong } from '../../engine/types.js';
+import type { GenContext, Template, Wrong } from '../../engine/types.js';
 import type { Rng } from '../../engine/rng.js';
 import { nearBy } from '../../engine/choices.js';
 import { LANGUAGES, type LanguageId } from '../../areas.js';
@@ -53,8 +53,8 @@ export const loopOutput: Template<number> = {
   area: 'programming',
   subtype: '반복문 출력',
   difficulty: 1,
-  generate(rng: Rng) {
-    const lang = rng.pick(LANGUAGES);
+  generate(rng: Rng, ctx: GenContext) {
+    const lang = LANGUAGES.find((l) => l.id === ctx.lang)!;
     const k = rng.int(2, 5);
     // 시작값과 끝값을 모두 k의 배수로 두어, 범위 실수(시작·끝 포함 여부)가 항상 다른 값이 되게 한다
     const start = k * rng.int(1, 3);

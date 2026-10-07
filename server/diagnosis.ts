@@ -9,6 +9,7 @@ import { analyze, LEVEL_LABEL, type Report } from './report/analyze.js';
 import type { Explanation, PublicChoice, PublicQuestion, ReportResponse } from '../shared/api.js';
 import { FREE_EXPLANATION_COUNT } from '../shared/product.js';
 import type { DiagnosisLevel } from '../shared/api.js';
+import { languageName, type LanguageId } from '../shared/languages.js';
 
 /**
  * 영역별 문항 수. 세트는 영역 안에서 서로 다른 유형만 고르므로 유형 수보다 클 수 없다.
@@ -23,8 +24,8 @@ export const QUESTION_COUNT = AREA_IDS.length * PER_AREA;
  * 심화 전용 템플릿은 아직 없다. 심화 스위치(ADVANCED_LEVEL_ENABLED)를 켜면 임시로 기본과 같은 템플릿을 쓰며,
  * 생성 시드가 따로라(server/token.ts의 generationSeed) 같은 공개 시드에서도 다른 문항이 나온다. 문항 수는 기본과 같다.
  */
-export function generateQuestions(genSeed: number, _level: DiagnosisLevel = 'basic'): Problem[] {
-  return generateSet(TEMPLATES, genSeed, { areas: AREA_IDS, perArea: PER_AREA });
+export function generateQuestions(genSeed: number, lang: LanguageId, _level: DiagnosisLevel = 'basic'): Problem[] {
+  return generateSet(TEMPLATES, genSeed, { areas: AREA_IDS, perArea: PER_AREA, lang });
 }
 
 /** 보기에서 정답 여부·실수 유형을 빼고 표시용 값만 남긴다 */
@@ -44,17 +45,19 @@ export interface FullResult {
   qs: Problem[];
   answers: number[];
   report: Report;
+  /** 사용자가 고른 프로그래밍 언어 */
+  lang: LanguageId;
   /** 심화일 때만 'advanced' (기본은 없음: 이전과 같은 응답) */
   level?: 'advanced';
 }
 
-export function score(qs: Problem[], answers: number[], secs: number[], level: DiagnosisLevel = 'basic'): FullResult {
+export function score(qs: Problem[], answers: number[], secs: number[], lang: LanguageId, level: DiagnosisLevel = 'basic'): FullResult {
   const attempts = answers.map((picked, i) => ({ picked, sec: secs[i] }));
   // 총 풀이 시간 = 문항별 시간 합의 반올림 (이전 브라우저 계산과 같은 기준)
   const totalSec = Math.round(secs.reduce((a, b) => a + b, 0));
   // 심화도 판정 규칙과 영역 메타(권장 시간·학습 순서)는 기본과 같다. 응답에 심화 표시만 붙인다.
-  if (level === 'advanced') return { qs, answers, report: analyze(qs, attempts, totalSec), level: 'advanced' };
-  return { qs, answers, report: analyze(qs, attempts, totalSec) };
+  if (level === 'advanced') return { qs, answers, report: analyze(qs, attempts, totalSec), lang, level: 'advanced' };
+  return { qs, answers, report: analyze(qs, attempts, totalSec), lang };
 }
 
 const pct = (r: number) => Math.round(r * 100);
@@ -104,7 +107,14 @@ export function composeReportResponse(full: FullResult, scope?: ReportScope): Re
 function composeAll(full: FullResult): ReportResponse {
   const { qs, answers, report: r } = full;
   return {
-    meta: { total: r.total, correct: r.correct, totalSec: r.totalSec, perArea: r.areas[0]?.total ?? 0, ...(full.level === 'advanced' ? { level: 'advanced' as const } : {}) },
+    meta: {
+      total: r.total,
+      correct: r.correct,
+      totalSec: r.totalSec,
+      perArea: r.areas[0]?.total ?? 0,
+      language: { id: full.lang, name: languageName(full.lang) },
+      ...(full.level === 'advanced' ? { level: 'advanced' as const } : {}),
+    },
     summary: r.areas.map((a) => ({
       areaId: a.meta.id,
       name: a.meta.name,

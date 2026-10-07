@@ -1,13 +1,13 @@
 /**
  * 문제 생성기 검증. 실패하면 exit 1 → npm run build도 실패한다.
  *
- * 템플릿 단위: 각 템플릿을 PER_TEMPLATE번 생성해
+ * 템플릿 단위: 각 템플릿을 PER_TEMPLATE번 생성해(출제할 수 있는 언어를 번갈아 가며)
  *   - 정답 존재(정확히 1개), 보기 5개·표시 중복 없음
  *   - 정답이 소수 첫째 자리 이내로 깔끔한 값인지(숫자 정답)
  *   - NaN·Infinity·음수·undefined 같은 비정상 값이 문장/보기/해설/도표에 없는지
  *   - 모든 오답에 mistakeTag가 붙었는지, 근접값 채움 비율이 낮은지
  *   - 문장 틀이 3가지 이상인지
- * 세트 단위: SETS개 세트를 만들어
+ * 세트 단위: 언어마다 SETS개 세트를 만들어
  *   - 영역별 문항 수, 영역 내 유형 중복 없음, 같은 세트 내 문장 중복 없음
  */
 import { TEMPLATES } from '../server/registry.js';
@@ -21,6 +21,8 @@ import { renderChart, renderTable } from '../shared/charts/render.js';
 import type { Figure } from '../shared/charts/types.js';
 import { analyze, judge } from '../server/report/analyze.js';
 import { PER_AREA } from '../server/diagnosis.js';
+import { availableFor } from '../server/engine/types.js';
+import { LANGUAGE_IDS } from '../shared/languages.js';
 
 const PER_TEMPLATE = Number(process.env.PER_TEMPLATE ?? 3000);
 const SETS = Number(process.env.SETS ?? 5000);
@@ -77,12 +79,15 @@ for (const tpl of TEMPLATES) {
   let fillers = 0;
   let generated = 0;
   const positions = [0, 0, 0, 0, 0];
-  for (let i = 0; i < PER_TEMPLATE; i++) {
+  const langs = LANGUAGE_IDS.filter((l) => availableFor(tpl, l));
+  if (!langs.length) fail(`${tpl.id}: 출제할 수 있는 언어가 없음`);
+  for (let i = 0; i < PER_TEMPLATE && langs.length; i++) {
     const rng = new Rng(i * 7919 + 13 + SEED_OFFSET);
-    const id = `${tpl.id}#${i}`;
+    const lang = langs[i % langs.length];
+    const id = `${tpl.id}#${i}(${lang})`;
     let g;
     try {
-      g = tpl.generate(rng);
+      g = tpl.generate(rng, { lang });
     } catch (e) {
       fail(`${id}: generate 예외 ${(e as Error).message}`);
       continue;
@@ -172,13 +177,14 @@ for (const a of AREAS) {
 if (new Set(TEMPLATES.map((t) => t.id)).size !== TEMPLATES.length) fail('템플릿 id 중복');
 
 // 세트
-console.log(`세트 ${SETS}개 생성 검사 (영역 ${activeAreas.length}개 × ${PER_AREA}문항)`);
+console.log(`세트 ${SETS}개 × 언어 ${LANGUAGE_IDS.length}개 생성 검사 (영역 ${activeAreas.length}개 × ${PER_AREA}문항)`);
 let setFail = 0;
-for (let s = 0; s < SETS; s++) {
-  const seed = (s * 2654435761 + SEED_OFFSET) >>> 0;
+for (let s = 0; s < SETS * LANGUAGE_IDS.length; s++) {
+  const lang = LANGUAGE_IDS[s % LANGUAGE_IDS.length];
+  const seed = ((s >> 2) * 2654435761 + SEED_OFFSET) >>> 0;
   let set;
   try {
-    set = generateSet(TEMPLATES, seed, { areas: activeAreas.map((a) => a.id), perArea: PER_AREA });
+    set = generateSet(TEMPLATES, seed, { areas: activeAreas.map((a) => a.id), perArea: PER_AREA, lang });
   } catch (e) {
     fail(`세트 ${seed}: 생성 실패 ${(e as Error).message}`);
     setFail++;
@@ -195,13 +201,15 @@ for (let s = 0; s < SETS; s++) {
 }
 // 같은 시드 → 같은 세트 (재현성)
 const areas = activeAreas.map((a) => a.id);
-const a1 = JSON.stringify(generateSet(TEMPLATES, 42, { areas, perArea: PER_AREA }));
-const a2 = JSON.stringify(generateSet(TEMPLATES, 42, { areas, perArea: PER_AREA }));
-if (a1 !== a2) fail('같은 시드에서 다른 세트가 나옴 (재현성 실패)');
+for (const lang of LANGUAGE_IDS) {
+  const a1 = JSON.stringify(generateSet(TEMPLATES, 42, { areas, perArea: PER_AREA, lang }));
+  const a2 = JSON.stringify(generateSet(TEMPLATES, 42, { areas, perArea: PER_AREA, lang }));
+  if (a1 !== a2) fail(`같은 시드에서 다른 세트가 나옴 (재현성 실패, ${lang})`);
+}
 
 // 리포트 분석 규칙
 {
-  const set = generateSet(TEMPLATES, 7, { areas, perArea: PER_AREA });
+  const set = generateSet(TEMPLATES, 7, { areas, perArea: PER_AREA, lang: 'python' });
   const right = set.map((q) => ({ picked: q.answerIndex, sec: 30 }));
   const wrongPick = (q: (typeof set)[number]) => (q.answerIndex + 1) % 5;
   const allRight = analyze(set, right, 360);

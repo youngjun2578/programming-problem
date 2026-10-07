@@ -1,12 +1,16 @@
-/** 템플릿별 예시 출력: npx tsx scripts/sample.ts [템플릿id 접두어] [개수] */
+/** 템플릿별 예시 출력: npx tsx scripts/sample.ts [템플릿id 접두어] [개수] [언어(c|cpp|python|java, 기본 python)] */
 import { TEMPLATES } from '../server/registry.js';
 import { Rng } from '../server/engine/rng.js';
 import { makeProblem } from '../server/engine/set.js';
+import { availableFor } from '../server/engine/types.js';
+import { isLanguageId } from '../shared/languages.js';
 
-const [prefix = '', count = '2'] = process.argv.slice(2);
-for (const t of TEMPLATES.filter((t) => t.id.startsWith(prefix))) {
+const [prefix = '', count = '2', langArg = 'python'] = process.argv.slice(2);
+if (!isLanguageId(langArg)) throw new Error(`언어는 c, cpp, python, java 가운데 하나: ${langArg}`);
+const lang = langArg;
+for (const t of TEMPLATES.filter((t) => t.id.startsWith(prefix) && availableFor(t, lang))) {
   for (let i = 0; i < Number(count); i++) {
-    const p = makeProblem(t, new Rng(Date.now() + i * 101));
+    const p = makeProblem(t, new Rng(Date.now() + i * 101), { lang });
     console.log(`\n[${t.id}] ${p.text}`);
     if (p.figure?.kind === 'code') {
       if (p.figure.table) console.log('  (표)', JSON.stringify(p.figure.table));

@@ -12,6 +12,7 @@ import { gunzipSync } from 'node:zlib';
 import { isDeepStrictEqual } from 'node:util';
 import { composeReportResponse, generateQuestions, score, toPublicQuestion } from '../server/diagnosis.js';
 import { AREA_BY_ID } from '../server/areas.js';
+import { languageName } from '../shared/languages.js';
 
 const FILE = 'tests/golden/golden.jsonl.gz';
 const LEVEL_LABEL: Record<string, string> = { stable: '안정', improve: '보완 필요', focus: '집중 필요' };
@@ -28,8 +29,8 @@ const lines = gunzipSync(readFileSync(FILE)).toString('utf8').trim().split('\n')
 let runs = 0;
 for (const line of lines) {
   const snap = JSON.parse(line);
-  const tag = `seed=${snap.seed}`;
-  const qs = generateQuestions(snap.seed);
+  const tag = `seed=${snap.seed} ${snap.lang}`;
+  const qs = generateQuestions(snap.seed, snap.lang);
   same(`${tag} 문항 전체(서버 내부)`, qs, snap.questions);
 
   // 세션 응답: 화면용 필드만, 정답·해설 없이
@@ -49,7 +50,7 @@ for (const line of lines) {
   for (const run of snap.runs) {
     runs++;
     const where = `${tag} ${run.pattern}`;
-    const full = score(qs, run.picked, run.secs);
+    const full = score(qs, run.picked, run.secs, snap.lang);
     // 서버 내부 분석 결과 전체 (응답에 싣지 않는 study·priority 포함)
     same(`${where} 분석 totalSec`, full.report.totalSec, run.report.totalSec);
     same(`${where} 분석 correct/total`, [full.report.correct, full.report.total], [run.report.correct, run.report.total]);
@@ -58,7 +59,13 @@ for (const line of lines) {
 
     const res = composeReportResponse(full);
     const areas = run.report.areas;
-    same(`${where} meta`, res.meta, { total: run.report.total, correct: run.report.correct, totalSec: run.report.totalSec, perArea: areas[0].total });
+    same(`${where} meta`, res.meta, {
+      total: run.report.total,
+      correct: run.report.correct,
+      totalSec: run.report.totalSec,
+      perArea: areas[0].total,
+      language: { id: snap.lang, name: languageName(snap.lang) },
+    });
     same(
       `${where} summary`,
       res.summary,
@@ -118,4 +125,4 @@ if (diffs.length) {
   diffs.slice(0, 50).forEach((d) => console.error('- ' + d));
   process.exit(1);
 }
-console.log(`골든 스냅샷 일치: 시드 ${lines.length}개, 입력 ${runs}개 (문항·세션 응답·리포트 세 구역·내부 분석 전체)`);
+console.log(`골든 스냅샷 일치: 시드·언어 ${lines.length}개, 입력 ${runs}개 (문항·세션 응답·리포트 세 구역·내부 분석 전체)`);

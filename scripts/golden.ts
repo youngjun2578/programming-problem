@@ -2,9 +2,9 @@
  * 골든 스냅샷 생성: 현재 엔진·템플릿·리포트 규칙의 출력을 기준값으로 저장한다.
  *   npx tsx scripts/golden.ts            → tests/golden/golden.jsonl.gz 생성
  *
- * 시드마다 세트 전체(문구·보기·도표·정답·해설)와,
+ * 시드 × 언어(c, cpp, python, java)마다 세트 전체(문구·보기·도표·정답·해설)와,
  * 답 패턴 3가지(전부 정답 / 전부 오답 / 섞음) × 시드별로 다른 풀이 시간에 대한 리포트 전체를 저장한다.
- * 한 줄에 시드 하나(JSON Lines).
+ * 한 줄에 시드·언어 하나(JSON Lines).
  *
  * 주의: 지금 기준값은 프로그래밍·SQL 임시 샘플 템플릿으로 만든 것이다. 다시 실행하면 기준이 현재 코드로 바뀌므로,
  * 엔진·템플릿·리포트 규칙을 의도적으로 바꾼 경우에만 다시 만든다. 비교는 scripts/golden-compare.ts.
@@ -17,6 +17,7 @@ import { generateSet } from '../server/engine/set.js';
 import { analyze, type Attempt } from '../server/report/analyze.js';
 import type { Problem } from '../server/engine/types.js';
 import { PER_AREA } from '../server/diagnosis.js';
+import { LANGUAGE_IDS } from '../shared/languages.js';
 
 export const GOLDEN_FILE = 'tests/golden/golden.jsonl.gz';
 export const SEED_COUNT = 40;
@@ -66,12 +67,14 @@ if (process.argv[1]?.endsWith('golden.ts')) {
   const areas = AREAS.filter((a) => TEMPLATES.some((t) => t.area === a.id)).map((a) => a.id);
   const lines: string[] = [];
   goldenSeeds().forEach((seed, s) => {
-    const qs = generateSet(TEMPLATES, seed, { areas, perArea: PER_AREA });
-    const runs = inputsFor(qs, s).map((inp) => ({ ...inp, report: snapshotReport(qs, inp.picked, inp.secs) }));
-    lines.push(JSON.stringify({ seed, questions: qs, runs }));
+    for (const lang of LANGUAGE_IDS) {
+      const qs = generateSet(TEMPLATES, seed, { areas, perArea: PER_AREA, lang });
+      const runs = inputsFor(qs, s).map((inp) => ({ ...inp, report: snapshotReport(qs, inp.picked, inp.secs) }));
+      lines.push(JSON.stringify({ seed, lang, questions: qs, runs }));
+    }
   });
   mkdirSync('tests/golden', { recursive: true });
   // JSON Lines를 gzip으로 저장한다. 읽을 때는 gunzipSync.
   writeFileSync(GOLDEN_FILE, gzipSync(lines.join('\n') + '\n', { level: 9 }));
-  console.log(`골든 스냅샷 저장: ${GOLDEN_FILE} (시드 ${lines.length}개 × 패턴 3개)`);
+  console.log(`골든 스냅샷 저장: ${GOLDEN_FILE} (시드·언어 ${lines.length}개 × 패턴 3개)`);
 }

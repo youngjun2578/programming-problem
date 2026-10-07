@@ -16,6 +16,7 @@ import { AREAS } from '../server/areas.js';
 import { MISTAKES } from '../server/engine/mistakes.js';
 import { judge } from '../server/report/analyze.js';
 import { generateQuestions } from '../server/diagnosis.js';
+import { LANGUAGE_IDS } from '../shared/languages.js';
 
 const DIST = process.env.DIST ?? 'dist';
 
@@ -63,7 +64,7 @@ for (const m of ['server/engine', 'server/templates', 'server/report', 'registry
   add('서버 모듈 이름', m);
 // 실제 생성한 문항의 해설·문제 문장 (시드 몇 개)
 for (const seed of [1, 2, 3, 12345, 987654321]) {
-  for (const q of [...generateQuestions(seed), ...generateQuestions(seed, 'advanced')]) {
+  for (const q of LANGUAGE_IDS.flatMap((lang) => [...generateQuestions(seed, lang), ...generateQuestions(seed, lang, 'advanced')])) {
     q.steps.forEach((s) => add('해설 문장', s));
     add('문제 문장', q.text);
   }

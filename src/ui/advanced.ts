@@ -1,5 +1,6 @@
 import '../styles/advanced.css';
 import type { ReportResponse, SessionResponse } from '../../shared/api';
+import type { LanguageId } from '../../shared/languages';
 import { startAdvancedSession, startSession } from './api';
 import { esc } from './dom';
 
@@ -25,8 +26,8 @@ export function setAdvanced(on: boolean) {
   window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
 }
 
-/** 지금 수준으로 세션 요청 */
-export const requestSession = (): Promise<SessionResponse> => (advanced ? startAdvancedSession() : startSession());
+/** 지금 수준과 고른 언어로 세션 요청 */
+export const requestSession = (lang: LanguageId): Promise<SessionResponse> => (advanced ? startAdvancedSession(lang) : startSession(lang));
 
 export const UNAVAILABLE = {
   title: '심화 난이도는 아직 준비 중입니다',

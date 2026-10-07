@@ -11,6 +11,7 @@ import { TEMPLATES } from '../../server/registry.js';
 import { Rng } from '../../server/engine/rng.js';
 import { makeProblem } from '../../server/engine/set.js';
 import type { Problem } from '../../server/engine/types.js';
+import type { LanguageId } from '../../shared/languages.js';
 
 export interface Solved {
   /** 풀이 단계(새로 쓴 문장) */
@@ -31,15 +32,16 @@ const SOLVERS: Record<string, { match: RegExp; solve: Solver }[]> = {};
 export interface Example {
   templateId: string;
   seed: number;
+  lang: LanguageId;
   problem: Problem;
   solved: Solved;
 }
 
-/** 템플릿 id와 시드로 예제를 만들고 검산한다. 문제 문장이 풀이 함수의 match와 맞아야 한다. */
-export function buildExample(templateId: string, seed: number): Example {
+/** 템플릿 id·시드·언어로 예제를 만들고 검산한다. 문제 문장이 풀이 함수의 match와 맞아야 한다. */
+export function buildExample(templateId: string, seed: number, lang: LanguageId = 'python'): Example {
   const tpl = TEMPLATES.find((t) => t.id === templateId);
   need(tpl, `없는 템플릿 ${templateId}`);
-  const problem = makeProblem(tpl, new Rng(seed));
+  const problem = makeProblem(tpl, new Rng(seed), { lang });
   const solver = SOLVERS[templateId]?.find((s) => s.match.test(problem.text));
   need(solver, `${templateId} 시드 ${seed}: 이 문제 형태의 풀이 함수가 없음 — ${problem.text.slice(0, 40)}`);
   const solved = solver.solve(problem);
@@ -48,18 +50,18 @@ export function buildExample(templateId: string, seed: number): Example {
   need(engineAnswer === solved.answer, `${templateId} 시드 ${seed}: 검산 불일치 (엔진 ${engineAnswer}, 계산 ${solved.answer})`);
   // 엔진 해설 문장을 그대로 쓰지 않았는지
   for (const s of solved.steps) need(!problem.steps.includes(s), `${templateId} 시드 ${seed}: 엔진 해설 문장과 같은 풀이 문장`);
-  return { templateId, seed, problem, solved };
+  return { templateId, seed, lang, problem, solved };
 }
 
 /** 개발용: 원하는 형태의 문제가 나오는 시드 찾기 */
-export function findSeeds(templateId: string, match: RegExp, count = 5, from = 1): number[] {
+export function findSeeds(templateId: string, match: RegExp, count = 5, from = 1, lang: LanguageId = 'python'): number[] {
   const tpl = TEMPLATES.find((t) => t.id === templateId)!;
   const out: number[] = [];
   for (let s = from; out.length < count && s < from + 20000; s++) {
     try {
-      const p = makeProblem(tpl, new Rng(s));
+      const p = makeProblem(tpl, new Rng(s), { lang });
       if (match.test(p.text)) {
-        buildExample(templateId, s);
+        buildExample(templateId, s, lang);
         out.push(s);
       }
     } catch {

@@ -1,6 +1,7 @@
 import type { Rng } from './rng.js';
 import type { MistakeTag } from './mistakes.js';
 import type { ChartSpec, Figure } from '../../shared/charts/types.js';
+import type { LanguageId } from '../../shared/languages.js';
 
 export type AreaId = 'programming' | 'sql';
 export type Difficulty = 1 | 2 | 3;
@@ -27,13 +28,24 @@ export interface Generated<V = number> {
   near?: (k: number) => V | null;
 }
 
+/** 문항 하나를 만들 때 템플릿에 주는 조건 */
+export interface GenContext {
+  /** 사용자가 고른 프로그래밍 언어. 프로그래밍 템플릿은 이 언어로만 코드를 만든다(SQL 템플릿은 쓰지 않음). */
+  lang: LanguageId;
+}
+
 export interface Template<V = any> {
   id: string;
   area: AreaId;
   subtype: string;
   difficulty: Difficulty;
-  generate(rng: Rng): Generated<V>;
+  /** 언어 전용 템플릿이면 출제할 수 있는 언어. 없으면 모든 언어 */
+  langs?: readonly LanguageId[];
+  generate(rng: Rng, ctx: GenContext): Generated<V>;
 }
+
+/** 이 언어로 출제할 수 있는 템플릿인가 */
+export const availableFor = (tpl: Template, lang: LanguageId) => !tpl.langs || tpl.langs.includes(lang);
 
 export interface Choice {
   label: string;

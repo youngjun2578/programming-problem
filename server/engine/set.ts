@@ -1,9 +1,9 @@
 import { Rng } from './rng.js';
 import { buildChoices } from './choices.js';
-import type { AreaId, Problem, Template } from './types.js';
+import { availableFor, type AreaId, type GenContext, type Problem, type Template } from './types.js';
 
-export function makeProblem(tpl: Template, rng: Rng): Problem {
-  const g = tpl.generate(rng);
+export function makeProblem(tpl: Template, rng: Rng, ctx: GenContext): Problem {
+  const g = tpl.generate(rng, ctx);
   const { choices, answerIndex, fillers } = buildChoices(rng, g);
   return {
     templateId: tpl.id,
@@ -44,6 +44,8 @@ function pickTemplates(rng: Rng, pool: Template[], n: number): Template[] {
 export interface SetOptions {
   areas: AreaId[];
   perArea: number;
+  /** 사용자가 고른 언어. 이 언어로 출제할 수 있는 템플릿만 후보로 쓴다. */
+  lang: GenContext['lang'];
 }
 
 /** 영역 순서대로 영역당 perArea 문항. 같은 세트 안에서 문장이 겹치지 않게 한다. */
@@ -52,12 +54,12 @@ export function generateSet(templates: Template[], seed: number, opts: SetOption
   const texts = new Set<string>();
   const out: Problem[] = [];
   for (const area of opts.areas) {
-    const pool = templates.filter((t) => t.area === area);
+    const pool = templates.filter((t) => t.area === area && availableFor(t, opts.lang));
     for (const tpl of pickTemplates(rng, pool, opts.perArea)) {
       let p: Problem | null = null;
       for (let tries = 0; tries < 30 && !p; tries++) {
         try {
-          const cand = makeProblem(tpl, rng);
+          const cand = makeProblem(tpl, rng, { lang: opts.lang });
           if (!texts.has(cand.text)) p = cand;
         } catch {
           // 드물게 보기 구성이 안 되는 조합은 다시 뽑는다. validate가 빈도를 감시한다.

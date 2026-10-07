@@ -4,7 +4,7 @@
  *
  *  - status: draft  → 개발 서버에서만 만든다(“초안” 표시, noindex). 운영 빌드에는 HTML·목록·sitemap 모두 없음
  *  - status: published → 운영 빌드에 포함, 메타·OG·JSON-LD·sitemap·목록
- *  - 예제: 본문의 <!-- example: 템플릿id 시드 --> 줄을 엔진 문제 + 직접 계산한 풀이로 바꾼다(examples.ts에서 검산)
+ *  - 예제: 본문의 <!-- example: 템플릿id 시드 [언어] --> 줄을(언어를 빼면 python) 엔진 문제 + 직접 계산한 풀이로 바꾼다(examples.ts에서 검산)
  *  - 내용 검사: 리포트용 문구·템플릿 이름·이용권 관련 낱말이 들어가면 빌드를 멈춘다
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -18,6 +18,7 @@ import { AREAS } from '../../server/areas.js';
 import { TEMPLATES } from '../../server/registry.js';
 import { generateQuestions } from '../../server/diagnosis.js';
 import { SITE_NAME } from '../../shared/site.js';
+import { LANGUAGE_IDS, type LanguageId } from '../../shared/languages.js';
 
 export const CONTENT_DIR = 'content/guides';
 /** 생성 HTML을 두는 곳(프로젝트 루트 기준). .gitignore에 있음 */
@@ -121,7 +122,7 @@ export function loadGuides(root = '.'): Guide[] {
 const BUNDLE_CHECK_SEEDS = [1, 2, 3, 12345, 987654321];
 let needleCache: string[] | null = null;
 function bundleNeedles(): string[] {
-  needleCache ??= [...new Set(BUNDLE_CHECK_SEEDS.flatMap((s) => generateQuestions(s).flatMap((q) => [q.text, ...q.steps])))].filter((n) => n.length >= 4);
+  needleCache ??= [...new Set(BUNDLE_CHECK_SEEDS.flatMap((s) => LANGUAGE_IDS.flatMap((lang) => generateQuestions(s, lang)).flatMap((q) => [q.text, ...q.steps])))].filter((n) => n.length >= 4);
   return needleCache;
 }
 
@@ -180,12 +181,12 @@ function exampleHtml(e: Example, n: number): string {
   ].join('');
 }
 
-const EXAMPLE_LINE = /^<!--\s*example:\s*([\w.]+)\s+(\d+)\s*-->$/gm;
+const EXAMPLE_LINE = /^<!--\s*example:\s*([\w.]+)\s+(\d+)(?:\s+(c|cpp|python|java))?\s*-->$/gm;
 
 function renderBody(g: Guide): { html: string; examples: Example[] } {
   const examples: Example[] = [];
-  const md = g.body.replace(EXAMPLE_LINE, (_, id: string, seed: string) => {
-    const e = buildExample(id, Number(seed));
+  const md = g.body.replace(EXAMPLE_LINE, (_, id: string, seed: string, lang?: LanguageId) => {
+    const e = buildExample(id, Number(seed), lang);
     examples.push(e);
     // 앞뒤 빈 줄: 마크다운이 HTML 덩어리로 그대로 둔다
     return `\n${exampleHtml(e, examples.length)}\n`;
