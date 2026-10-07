@@ -178,4 +178,4 @@ SQL은 같은 표를 조건 수(1~3개), 연산자 종류, 표의 NULL·조인 �
 | 생성기 검증 | `npm run validate` (build에 포함) | 유형마다 시드 수천 개, 네 언어·난이도 1~3 모두. 정답 1개, 보기 5개 중복 없음, 비정상 값 없음, 오답 태그, 문장 틀 수, 세트 구성 |
 | 골든 | `npm run test:golden` | 네 언어 × 고정 시드의 세트·채점 결과가 기준값과 같은지 |
 | API | `npm run test:api` | 토큰·언어 선택·채점, 선택하지 않은 언어 코드가 응답에 없는지 |
-| 교차 검증(개발용) | `npm run check:exec` | 실제 `python3`, `gcc`, `g++`, `javac`+`java`, `sqlite3`로 같은 문제를 실행해 참조 평가기와 비교. 서버·build·test에 포함하지 않음 |
+| 교차 검증(개발용) | `npm run check:exec` | 실제 `python3`, `gcc`, `g++`(`-Wall -Wextra -Werror -fsanitize=undefined`), `javac`+`java`(`-Xlint:all -Werror`), `sqlite3`로 같은 문제를 실행해 참조 평가기와 비교(유형마다 시드 200개, 실행마다 임시 폴더·5초 제한). `sqlite3` 명령이 없으면 `python3` 내장 `sqlite3` 모듈(같은 SQLite 엔진)로 실행. 서버·build·test에 포함하지 않음 |

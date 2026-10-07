@@ -15,6 +15,7 @@
     "test:gating": "tsx scripts/gating-test.ts",
     "check:guides": "tsx scripts/guides/check-dist.ts",
     "check:production": "tsx scripts/check-production.ts",
+    "check:exec": "tsx scripts/crosscheck.ts",
     "guides": "tsx scripts/guides/build.ts --drafts"
   },
   "devDependencies": {
