@@ -1,0 +1,102 @@
+/* 성적표처럼 인쇄/PDF 저장 */
+@media print {
+  /* 다크모드 선택자보다 우선하도록 같은 선택자를 함께 쓴다 */
+  :root,
+  :root:not([data-theme='light']) {
+    color-scheme: light;
+    --bg: #fff;
+    --surface: #f4f5f7;
+    --ink: #000;
+    --ink-2: #222;
+    --muted: #444;
+    --rule: #bbb;
+    --rule-strong: #888;
+    --primary: #1b2f55;
+    --accent: #7a3d00;
+    --ok: #135c38;
+    --bad: #8f1b12;
+    --chart-1: #1b2f55;
+    --chart-2: #34507f;
+    --chart-3: #4f6fa3;
+    --chart-4: #7491c2;
+    --chart-5: #9db2d8;
+    --chart-grid: #ddd;
+    --chart-axis: #777;
+  }
+  @page {
+    size: A4;
+    margin: 16mm 14mm;
+  }
+  body {
+    background: #fff;
+    color: #000;
+    font-size: 10.5pt;
+    line-height: 1.55;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .print-note {
+    margin: 0 0 4mm;
+    font-weight: 600;
+  }
+  .no-print,
+  .masthead,
+  .site-footer nav,
+  .progress,
+  .skip {
+    display: none !important;
+  }
+  .page {
+    max-width: none;
+    padding: 0;
+  }
+  .site-footer {
+    margin-top: 8mm;
+    border-top: 1px solid #bbb;
+  }
+  .site-footer .page {
+    padding: 2mm 0 0;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .section-title {
+    break-after: avoid;
+  }
+  /* 영역 상세는 인쇄할 때 모두 펼친다 */
+  .summary .area-detail[hidden] {
+    display: table-row !important;
+  }
+  .area-toggle {
+    min-height: 0;
+  }
+  .area-toggle::after {
+    display: none;
+  }
+  .area h3 {
+    break-after: avoid;
+  }
+  .area-row > * {
+    border-bottom-color: transparent;
+  }
+  .kv,
+  .patterns li {
+    break-inside: avoid;
+  }
+  .item {
+    break-inside: avoid;
+  }
+  .item summary::after {
+    display: none;
+  }
+  .figure,
+  .kv {
+    break-inside: avoid;
+  }
+  .ans-chart,
+  .chart {
+    max-width: 90mm;
+  }
+}
