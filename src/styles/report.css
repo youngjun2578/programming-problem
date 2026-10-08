@@ -425,8 +425,9 @@
 .trace td.note {
   white-space: nowrap;
 }
+/* 표가 화면보다 넓어 가로로 밀릴 때도 첫 화면에서 보이도록 왼쪽 정렬 */
 .trace tr.omitted td {
-  text-align: center;
+  text-align: left;
   color: var(--muted);
 }
 .trace .depth {
