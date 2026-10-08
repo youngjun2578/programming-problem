@@ -170,8 +170,10 @@ export function renderChart(spec: ChartSpec, size: ChartSize = DEFAULT): string 
 export function renderTable(t: TableSpec): string {
   // SQL 표의 NULL은 숫자 열에 주로 나오므로 숫자처럼 오른쪽에 붙이고 흐리게 보인다
   const cell = (c: string | number) => (typeof c === 'number' ? `<td class="num">${num(c)}</td>` : c === 'NULL' ? '<td class="num null">NULL</td>' : `<td>${esc(c)}</td>`);
+  // 숫자 열(값이 모두 숫자 또는 NULL)은 머리도 오른쪽에 붙여 값과 줄을 맞춘다. 첫 열은 행 머리라 왼쪽
+  const numCol = t.head.map((_, i) => i > 0 && t.rows.some((r) => typeof r[i] === 'number') && t.rows.every((r) => typeof r[i] === 'number' || r[i] === 'NULL'));
   return `<table class="data-table">${t.caption ? `<caption>${esc(t.caption)}${t.unit ? ` <span class="unit">(단위: ${esc(t.unit)})</span>` : ''}</caption>` : ''}<thead><tr>${t.head
-    .map((x) => `<th scope="col">${esc(x)}</th>`)
+    .map((x, i) => `<th scope="col"${numCol[i] ? ' class="num"' : ''}>${esc(x)}</th>`)
     .join('')}</tr></thead><tbody>${t.rows
     .map((r) => `<tr>${r.map((c, i) => (i === 0 ? `<th scope="row">${esc(String(c))}</th>` : cell(c))).join('')}</tr>`)
     .join('')}</tbody></table>`;

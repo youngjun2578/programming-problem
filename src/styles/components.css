@@ -513,7 +513,7 @@
   font-size: 14px;
 }
 .data-table td.num,
-.data-table thead th:not(:first-child) {
+.data-table thead th.num {
   text-align: right;
 }
 .data-table tbody th {
@@ -568,6 +568,24 @@
   overflow-x: auto;
   max-width: 100%;
   -webkit-overflow-scrolling: touch;
+}
+/*
+ * 가로로 더 볼 내용이 있으면 오른쪽(왼쪽) 가장자리에 옅은 그림자를 보인다.
+ * 덮개(local)가 내용과 함께 움직이며 끝까지 밀면 그림자를 가린다(스크립트 없이).
+ */
+.table-scroll,
+.figure:has(.data-table) {
+  background:
+    linear-gradient(to right, var(--bg), var(--bg)) left / 24px 100% no-repeat local,
+    linear-gradient(to left, var(--bg), var(--bg)) right / 24px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, var(--scroll-shadow), transparent) left / 10px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, var(--scroll-shadow), transparent) right / 10px 100% no-repeat scroll;
+}
+.code-block {
+  background:
+    linear-gradient(to left, var(--surface), var(--surface)) right / 24px 100% no-repeat local,
+    radial-gradient(farthest-side at 100% 50%, var(--scroll-shadow), transparent) right / 10px 100% no-repeat scroll,
+    var(--surface);
 }
 @media (max-width: 420px) {
   .data-table {

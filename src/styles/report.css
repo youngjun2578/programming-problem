@@ -449,6 +449,7 @@
   margin: 0 0 var(--s2);
 }
 .stage-title code {
+  font-size: 14px;
   font-weight: 600;
   white-space: pre-wrap;
   overflow-wrap: anywhere;

@@ -51,7 +51,8 @@ function conditionLines(head: string, e: SExpr): string[] {
 
 export function renderQuery(q: Query): string {
   const lines = [`SELECT ${q.select ? q.select.map(renderSExpr).join(', ') : '*'}`, `FROM ${q.from}`];
-  if (q.join) lines.push(`${q.join.kind} JOIN ${q.join.table} ON ${renderSExpr(q.join.on)}`);
+  // ON 조건은 다음 줄에 들여 쓴다(좁은 화면에서 한 줄이 너무 길어지지 않게)
+  if (q.join) lines.push(`${q.join.kind} JOIN ${q.join.table}`, `  ON ${renderSExpr(q.join.on)}`);
   if (q.where) lines.push(...conditionLines('WHERE', q.where));
   if (q.groupBy?.length) lines.push(`GROUP BY ${q.groupBy.map(renderSExpr).join(', ')}`);
   if (q.having) lines.push(...conditionLines('HAVING', q.having));

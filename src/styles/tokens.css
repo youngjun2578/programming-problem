@@ -9,6 +9,8 @@
   color-scheme: light;
   --bg: #ffffff;
   --surface: #f5f7fa;
+  /* 가로 스크롤 가장자리 그림자 */
+  --scroll-shadow: rgba(20, 29, 46, 0.18);
   --ink: #141d2e;
   --ink-2: #384456;
   --muted: #586374;
@@ -57,6 +59,7 @@
     color-scheme: dark;
     --bg: #0f1623;
     --surface: #151e2d;
+    --scroll-shadow: rgba(169, 192, 234, 0.28);
     --ink: #e7ebf1;
     --ink-2: #c4ccd8;
     --muted: #9ba6b6;
