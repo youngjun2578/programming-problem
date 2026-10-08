@@ -8,9 +8,10 @@ import type { Rng } from '../rng.js';
 import type { Generated, Wrong } from '../types.js';
 import type { MistakeTag } from '../mistakes.js';
 import type { TableSpec } from '../../../shared/charts/types.js';
-import { runQuery, SqlEvalError } from './eval.js';
+import { runQuery, SqlEvalError, type SqlStage } from './eval.js';
+import type { SqlStageView } from '../../../shared/api.js';
 import { renderQuery } from './render.js';
-import type { Query, Table, Value } from './model.js';
+import { sclone, type Query, type Table, type Value } from './model.js';
 
 export interface Theme {
   table: string;
@@ -154,10 +155,27 @@ const valid = (v: number | null | undefined): v is number => typeof v === 'numbe
 export function sqlWrongs(v: SqlVariant, answer: number): Wrong<number>[] {
   const out: Wrong<number>[] = [];
   for (const m of v.mistakes) {
-    const x = m.query !== undefined ? (m.query ? extract(m.query, v.tables, v.ask, false) : null) : m.value;
-    if (valid(x) && x !== answer) out.push({ value: x, mistakeTag: m.tag });
+    const q = m.query;
+    const x = q !== undefined ? (q ? extract(q, v.tables, v.ask, false) : null) : m.value;
+    if (!valid(x) || x === answer) continue;
+    // recheck: 실수한 질의를 표와 함께 새로 복사해 다시 계산(검증용). 값을 바로 계산한 실수는 없다
+    out.push(q ? { value: x, mistakeTag: m.tag, recheck: () => extract(sclone(q), sclone(v.tables), v.ask, false) } : { value: x, mistakeTag: m.tag });
   }
   return out;
+}
+
+/** 해설에 보여 줄 중간 결과 표의 최대 행 수 */
+export const STAGE_MAX_ROWS = 8;
+
+function stageView(st: SqlStage): SqlStageView {
+  const shown = st.rows.slice(0, STAGE_MAX_ROWS);
+  return {
+    title: st.title,
+    rowCount: st.count,
+    table: { head: st.head, rows: shown.map((r) => r.map((x) => (x === null ? 'NULL' : x))) },
+    more: st.rows.length - shown.length,
+    ...(st.note ? { note: st.note } : {}),
+  };
 }
 
 /** 정답이 분명하고 서로 다른 오답이 4개 이상 나오는 변형이 나올 때까지 다시 뽑는다 */
@@ -185,6 +203,9 @@ const PHRASES: Record<AskKind, ((label: string) => string)[]> = {
 
 export function sqlProblem(rng: Rng, picked: { v: SqlVariant; answer: number }): Generated<number> {
   const { v, answer } = picked;
+  // 해설: 처리 순서별 중간 결과(같은 질의를 단계 기록을 켜고 한 번 더 계산한다. 결과가 같아야 한다, selfCheck)
+  const staged = runQuery(v.query, v.tables, { stages: true });
+  const stages = staged.stages!;
   const fmt = (x: number) => (v.ask === 'rows' ? `${x}개` : String(x));
   const step = v.ask === 'value' && answer >= 100 && answer % 10 === 0 ? 10 : 1;
   return {
@@ -195,5 +216,16 @@ export function sqlProblem(rng: Rng, picked: { v: SqlVariant; answer: number }):
     format: fmt,
     figure: { kind: 'code', lang: 'SQL', code: renderQuery(v.query), tables: v.tables.map(tableSpec) },
     near: (k) => (answer + k * step > 0 ? answer + k * step : null),
+    detail: { sqlStages: stages.map(stageView) },
+    /** 검증용: 단계 기록을 켜도 결과가 같은지, 마지막 단계(SELECT)가 정답과 같은지 */
+    selfCheck: () => {
+      const bad: string[] = [];
+      const plain = runQuery(v.query, v.tables);
+      if (JSON.stringify(plain.rows) !== JSON.stringify(staged.rows)) bad.push('단계 기록을 켜고 계산한 결과가 다름');
+      const last = stages[stages.length - 1];
+      if (!last || !last.title.startsWith('SELECT')) bad.push('마지막 단계가 SELECT가 아님');
+      else if (v.ask === 'rows' ? last.count !== answer : last.count !== 1 || last.rows[0][last.rows[0].length - 1] !== answer) bad.push(`마지막 중간표가 정답(${answer})과 다름`);
+      return bad;
+    },
   };
 }

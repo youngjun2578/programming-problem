@@ -11,6 +11,7 @@
  * 문자열은 같음(=, <>, IN)과 LIKE만 비교한다(크기 비교는 DB마다 정렬 규칙이 달라 쓰지 않는다).
  */
 import type { Query, SExpr, Table, Value } from './model.js';
+import { renderSExpr } from './render.js';
 
 export class SqlEvalError extends Error {}
 
@@ -167,11 +168,54 @@ const hasAgg = (e: SExpr): boolean => {
   }
 };
 
-export function runQuery(q: Query, tables: Table[]): SqlResult {
+/** 처리 단계 하나의 중간 결과(해설용) */
+export interface SqlStage {
+  /** 예: "FROM employee", "WHERE salary >= 300", "GROUP BY dept", "SELECT dept, SUM(salary)" */
+  title: string;
+  head: string[];
+  rows: Value[][];
+  /** 이 단계 뒤의 행 수(GROUP BY·HAVING은 그룹 수) */
+  count: number;
+  /** NULL 때문에 행이 빠지거나 집계가 달라졌을 때 한 문장 */
+  note?: string;
+}
+
+export interface RunQueryOptions {
+  /** 처리 순서(FROM/JOIN → WHERE → GROUP BY → HAVING → SELECT)마다 중간 결과를 남긴다. 남겨도 결과는 같다. */
+  stages?: boolean;
+}
+
+/** 열 머리: 표 이름 없이 열 이름만, 같은 이름이 둘 이상이면 "표.열" */
+function heads(keys: string[]): string[] {
+  const short = keys.map((k) => k.slice(k.indexOf('.') + 1));
+  return keys.map((k, i) => (short.filter((x) => x === short[i]).length > 1 ? k : short[i]));
+}
+
+/** 식 안의 집계 함수들(중복 없이, 나온 순서대로) */
+function aggsIn(e: SExpr, out: SExpr[] = []): SExpr[] {
+  if (e.k === 'agg') {
+    if (!out.some((x) => JSON.stringify(x) === JSON.stringify(e))) out.push(e);
+    return out;
+  }
+  if (e.k === 'cmp' || e.k === 'and' || e.k === 'or') {
+    aggsIn(e.a, out);
+    aggsIn(e.b, out);
+  } else if (e.k === 'not') aggsIn(e.e, out);
+  return out;
+}
+
+export function runQuery(q: Query, tables: Table[], opts: RunQueryOptions = {}): SqlResult & { stages?: SqlStage[] } {
+  const stages: SqlStage[] | undefined = opts.stages ? [] : undefined;
   const byName = new Map(tables.map((t) => [t.name, t]));
   const from = byName.get(q.from);
   if (!from) throw new SqlEvalError(`없는 표 ${q.from}`);
   let rows = rowsOf(from);
+  const rowStage = (title: string, rs: Row[], note?: string) => {
+    if (!stages) return;
+    const keys = rs.length ? Object.keys(rs[0]) : [];
+    stages.push({ title, head: heads(keys), rows: rs.map((r) => keys.map((k) => r[k])), count: rs.length, ...(note ? { note } : {}) });
+  };
+  rowStage(`FROM ${q.from}`, rows);
 
   if (q.join) {
     const right = byName.get(q.join.table);
@@ -179,23 +223,37 @@ export function runQuery(q: Query, tables: Table[]): SqlResult {
     const rrows = rowsOf(right);
     const nullRight = Object.fromEntries(right.cols.map((c) => [`${right.name}.${c.name}`, null as Value]));
     const joined: Row[] = [];
+    let nullKey = 0;
     for (const l of rows) {
-      const matches = rrows.filter((r) => truth(q.join!.on, [{ ...l, ...r }], false) === true);
+      const results = rrows.map((r) => truth(q.join!.on, [{ ...l, ...r }], false));
+      const matches = rrows.filter((_, i) => results[i] === true);
+      if (results.length && results.every((t) => t === null)) nullKey++;
       if (matches.length) matches.forEach((r) => joined.push({ ...l, ...r }));
       else if (q.join.kind === 'LEFT') joined.push({ ...l, ...nullRight });
     }
     rows = joined;
+    const note = nullKey
+      ? `조인 키가 NULL인 ${nullKey}개 행은 어떤 행과도 짝이 되지 않습니다(NULL = 값은 UNKNOWN)${q.join.kind === 'LEFT' ? '. LEFT JOIN이라 그 행은 오른쪽 열을 NULL로 채워 남깁니다.' : '. INNER JOIN에서는 빠집니다.'}`
+      : undefined;
+    rowStage(`${q.join.kind} JOIN ${q.join.table} ON ${renderSExpr(q.join.on)}`, rows, note);
   }
 
   if (q.where) {
     if (hasAgg(q.where)) throw new SqlEvalError('WHERE에는 집계 함수를 쓰지 않음');
-    rows = rows.filter((r) => truth(q.where!, [r], false) === true);
+    const results = rows.map((r) => truth(q.where!, [r], false));
+    const unknown = results.filter((t) => t === null).length;
+    rows = rows.filter((_, i) => results[i] === true);
+    rowStage(`WHERE ${renderSExpr(q.where)}`, rows, unknown ? `NULL이 있는 ${unknown}개 행은 조건 결과가 UNKNOWN(참도 거짓도 아님)이라 WHERE에서 빠집니다.` : undefined);
   }
 
   const grouped = !!q.groupBy?.length || !!q.having || (q.select ?? []).some(hasAgg);
   if (!grouped) {
-    if (!q.select) return { rows: rows.map((r) => Object.values(r)) };
-    return { rows: rows.map((r) => q.select!.map((e) => value(e, [r], false))) };
+    const out = q.select ? rows.map((r) => q.select!.map((e) => value(e, [r], false))) : rows.map((r) => Object.values(r));
+    if (stages) {
+      if (q.select) stages.push({ title: `SELECT ${q.select.map(renderSExpr).join(', ')}`, head: q.select.map(renderSExpr), rows: out, count: out.length });
+      else rowStage('SELECT *', rows);
+    }
+    return stages ? { rows: out, stages } : { rows: out };
   }
   if (!q.select) throw new SqlEvalError('그룹 질의에는 SELECT *를 쓰지 않음');
   // 표준 SQL: 집계가 아닌 SELECT 열은 GROUP BY에 있어야 한다
@@ -211,10 +269,31 @@ export function runQuery(q: Query, tables: Table[]): SqlResult {
     }
   } else groups.set('*', rows);
 
-  const out: Value[][] = [];
-  for (const g of groups.values()) {
-    if (q.having && truth(q.having, g, true) !== true) continue;
-    out.push(q.select.map((e) => value(e, g, true)));
+  // 그룹 단계 표: 그룹 열 + 행 수 + SELECT·HAVING에 나오는 집계 값
+  const shownAggs = [...(q.having ? aggsIn(q.having) : []), ...q.select.flatMap((e) => aggsIn(e))].filter((x, i, a) => a.findIndex((y) => JSON.stringify(y) === JSON.stringify(x)) === i && !(x.k === 'agg' && x.fn === 'COUNT' && x.arg === null));
+  const groupHead = [...(q.groupBy ?? []).map(renderSExpr), '행 수', ...shownAggs.map(renderSExpr)];
+  const groupRow = (g: Row[]) => [...(q.groupBy ?? []).map((k) => value(k, g, false)), g.length, ...shownAggs.map((a) => value(a, g, true))];
+  if (stages && q.groupBy?.length) {
+    const gs = [...groups.values()];
+    stages.push({ title: `GROUP BY ${q.groupBy.map(renderSExpr).join(', ')}`, head: groupHead, rows: gs.map(groupRow), count: gs.length });
   }
-  return { rows: out };
+
+  const kept: Row[][] = [];
+  for (const g of groups.values()) if (!q.having || truth(q.having, g, true) === true) kept.push(g);
+  if (stages && q.having) stages.push({ title: `HAVING ${renderSExpr(q.having)}`, head: groupHead, rows: kept.map(groupRow), count: kept.length });
+
+  const out: Value[][] = kept.map((g) => q.select!.map((e) => value(e, g, true)));
+  if (stages) {
+    // 집계가 NULL을 빼고 계산한 경우 한 문장으로 짚는다
+    const nullNotes = q.select
+      .flatMap((e) => aggsIn(e))
+      .filter((a): a is Extract<SExpr, { k: 'agg' }> => a.k === 'agg' && a.arg !== null)
+      .map((a) => {
+        const n = kept.flat().filter((r) => value(a.arg!, [r], false) === null).length;
+        return n ? `${renderSExpr(a)}는 NULL인 ${n}개 값을 빼고 계산합니다(COUNT(*)만 NULL이 있는 행도 셉니다).` : '';
+      })
+      .filter(Boolean);
+    stages.push({ title: `SELECT ${q.select.map(renderSExpr).join(', ')}`, head: q.select.map(renderSExpr), rows: out, count: out.length, ...(nullNotes.length ? { note: nullNotes.join(' ') } : {}) });
+  }
+  return stages ? { rows: out, stages } : { rows: out };
 }
