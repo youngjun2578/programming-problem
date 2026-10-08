@@ -2,6 +2,7 @@ import type { Rng } from './rng.js';
 import type { MistakeTag } from './mistakes.js';
 import type { ChartSpec, Figure } from '../../shared/charts/types.js';
 import type { LanguageId } from '../../shared/languages.js';
+import type { ExplainDetail } from '../../shared/api.js';
 
 export type AreaId = 'programming' | 'sql';
 export type Difficulty = 1 | 2 | 3;
@@ -9,6 +10,11 @@ export type Difficulty = 1 | 2 | 3;
 export interface Wrong<V> {
   value: V;
   mistakeTag: MistakeTag;
+  /**
+   * 그 실수를 다시 적용해 값을 새로 계산한다(검증용, validate가 보기 값과 같은지 본다).
+   * 실수한 모델·질의 없이 값을 바로 계산한 오답(예: 표의 전체 행 수)은 없다.
+   */
+  recheck?: () => V | null;
 }
 
 /** 템플릿 하나가 한 번 생성하는 문제의 원재료 */
@@ -26,6 +32,10 @@ export interface Generated<V = number> {
   chart?: (v: V) => ChartSpec;
   /** 오답이 부족할 때 쓸 근접값(k = 1, -1, 2, -2, …). 숫자형 문제만. */
   near?: (k: number) => V | null;
+  /** 단계별 풀이(프로그래밍 추적표, SQL 단계별 중간 결과) */
+  detail?: ExplainDetail;
+  /** 검증용: 해설(추적·중간 결과)이 정답과 맞는지 스스로 확인하고 문제 목록을 돌려준다(validate가 부른다) */
+  selfCheck?: () => string[];
 }
 
 /** 문항 하나를 만들 때 템플릿에 주는 조건 */
@@ -68,6 +78,8 @@ export interface Problem {
   choices: Choice[];
   answerIndex: number;
   steps: string[];
+  /** 단계별 풀이 */
+  detail?: ExplainDetail;
   /** 근접값으로 채운 보기 수 (validate 통계용) */
   fillers: number;
 }

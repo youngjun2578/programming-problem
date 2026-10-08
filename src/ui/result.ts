@@ -1,5 +1,5 @@
-import type { AreaDetail, Explanation, ReportResponse, SummaryRow } from '../../shared/api';
-import { renderChart, renderFigure } from '../../shared/charts/render';
+import type { AreaDetail, Explanation, ReportResponse, SqlStageView, SummaryRow, TraceView } from '../../shared/api';
+import { renderChart, renderFigure, renderTable } from '../../shared/charts/render';
 import { CIRC, esc, fmtDuration } from './dom';
 import { SITE_NAME } from '../../shared/site';
 
@@ -63,7 +63,47 @@ function areaDetail(a: AreaDetail) {
 function choiceView(e: Explanation, k: number) {
   const c = e.choices[k];
   if (c.chart) return `<div class="ans-chart">${renderChart(c.chart, { w: 320, h: 170 })}</div>`;
-  return `<span class="ans-text">${c.label}</span>`;
+  return `<span class="ans-text">${esc(c.label)}</span>`;
+}
+
+/** 추적표: 단계 / 실행한 줄 / 변수 값 / 출력 / 설명. 줄인 구간은 한 행으로 */
+function traceTable(t: TraceView) {
+  const rows = t.rows
+    .map((r) =>
+      'omitted' in r
+        ? `<tr class="omitted"><td colspan="5">…(${r.omitted}단계 생략)</td></tr>`
+        : `<tr><td class="num">${r.step}</td><td class="num">${r.line}</td><td class="vars">${esc(r.vars) || '<span class="muted">-</span>'}</td><td class="num out">${esc(r.out)}</td><td class="note">${r.depth ? `<span class="depth">${'↳'.repeat(r.depth)}</span> ` : ''}${esc(r.note)}</td></tr>`,
+    )
+    .join('');
+  return `<div class="table-scroll"><table class="trace">
+    <caption>실행 추적${t.rows.some((r) => 'omitted' in r) ? ` <span class="sub">(전체 ${t.total}단계 가운데 앞뒤만)</span>` : ''}</caption>
+    <thead><tr><th scope="col">단계</th><th scope="col">줄</th><th scope="col">변수 값(실행 뒤)</th><th scope="col">출력</th><th scope="col">설명</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+
+/** SQL 처리 단계별 중간 결과 */
+function sqlStages(stages: SqlStageView[]) {
+  return `<ol class="sql-stages">${stages
+    .map(
+      (s) => `<li>
+      <p class="stage-title"><code>${esc(s.title)}</code> <span class="stage-count">이 단계 후 ${s.rowCount}${s.title.startsWith('GROUP BY') ? '개 그룹' : '행'}</span></p>
+      ${s.note ? `<p class="stage-note">${esc(s.note)}</p>` : ''}
+      <div class="table-scroll">${renderTable(s.table)}</div>
+      ${s.more ? `<p class="stage-more">…외 ${s.more}행</p>` : ''}
+    </li>`,
+    )
+    .join('')}</ol>`;
+}
+
+/** 보기마다 그 값이 나오는 이유 */
+function choiceReasonList(e: Explanation) {
+  return `<ul class="choice-reasons">${e.choices
+    .map((c, k) => {
+      const mine = k === e.picked ? ' <span class="mine">내 답</span>' : '';
+      const why = k === e.answerIndex ? '<b>정답</b>' : esc(e.choiceReasons[k] ?? '');
+      return `<li class="${k === e.answerIndex ? 'is-answer' : ''}"><span class="cr-label">${CIRC[k]} <span class="ans-text">${esc(c.label)}</span>${mine}</span><span class="cr-why">${why}</span></li>`;
+    })
+    .join('')}</ul>`;
 }
 
 function itemDetail(e: Explanation, i: number) {
@@ -75,7 +115,7 @@ function itemDetail(e: Explanation, i: number) {
       <span class="mark-result ${e.isCorrect ? 'ok' : 'no'}">${e.isCorrect ? '정답' : '오답'}</span>
     </summary>
     <div class="item-body">
-      <p class="q">${e.text}</p>
+      <p class="q">${esc(e.text)}</p>
       ${e.figure ? renderFigure(e.figure) : ''}
       <dl class="answers">
         <div><dt>내 답</dt><dd>${CIRC[e.picked]} ${choiceView(e, e.picked)}</dd></div>
@@ -83,7 +123,11 @@ function itemDetail(e: Explanation, i: number) {
       </dl>
       ${!e.isCorrect && e.pickedMistakeTag ? `<p class="why">고른 보기는 <b>${esc(e.pickedMistakeTag)}</b>에서 나오는 값이에요.</p>` : ''}
       <h4>풀이</h4>
-      <ol class="steps">${e.steps.map((s) => `<li>${s}</li>`).join('')}</ol>
+      <ol class="steps">${e.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>
+      ${e.detail?.trace ? `<h4>단계별 추적</h4><p class="muted">줄 번호는 위 코드의 줄 번호입니다.</p>${traceTable(e.detail.trace)}` : ''}
+      ${e.detail?.sqlStages ? `<h4>처리 순서별 중간 결과</h4><p class="muted">SQL은 FROM·JOIN → WHERE → GROUP BY → HAVING → SELECT 순서로 처리합니다.</p>${sqlStages(e.detail.sqlStages)}` : ''}
+      <h4>보기별 이유</h4>
+      ${choiceReasonList(e)}
     </div>
   </details>`;
 }

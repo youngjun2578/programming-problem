@@ -13,6 +13,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { composeReportResponse, generateQuestions, score, toPublicQuestion } from '../server/diagnosis.js';
 import { AREA_BY_ID } from '../server/areas.js';
 import { languageName } from '../shared/languages.js';
+import { reasonFor } from '../server/engine/reasons.js';
 
 const FILE = 'tests/golden/golden.jsonl.gz';
 const LEVEL_LABEL: Record<string, string> = { stable: '안정', improve: '보완 필요', focus: '집중 필요' };
@@ -112,8 +113,10 @@ for (const line of lines) {
           isCorrect: ok,
           pickedMistakeTag: ok ? null : (q.choices[picked]?.mistakeTag ?? null),
           steps: q.steps,
+          choiceReasons: q.choices.map((c: any) => (c.mistakeTag === null ? null : reasonFor(c.mistakeTag, q.area === 'sql' ? 'sql' : snap.lang))),
         };
         if (q.figure) e.figure = q.figure;
+        if (q.detail) e.detail = q.detail;
         return e;
       }),
     );

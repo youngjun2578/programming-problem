@@ -23,18 +23,43 @@ export interface RunOptions {
   maxSteps?: number;
   /** 값이 바뀔 때마다 기록할 변수 이름(해설용, main 안에서만) */
   watch?: string[];
+  /** 해설용 단계별 추적을 남긴다. 남겨도 실행 결과는 같다(상태를 읽기만 하고 복사한다). */
+  trace?: boolean;
+}
+
+/**
+ * 추적 한 단계. node는 그 단계를 만든 모델 조각(문장·if 분기·else 블록·case·함수)으로,
+ * 렌더러의 lineOf(render.ts)로 코드 줄 번호를 찾는다.
+ */
+export interface TraceEvent {
+  node: object;
+  /** 그 시점에 보이는 변수(지금 함수 안) */
+  vars: Record<string, number | number[]>;
+  /** 이 단계에서 출력한 값 */
+  out?: number;
+  /** 사람이 읽을 설명(조건 참·거짓, 반복 끝, 호출·반환 등) */
+  note?: string;
+  /** 함수 호출 깊이(main = 0) */
+  depth: number;
 }
 
 export interface RunResult {
   out: number[];
   /** watch 변수의 값 변화(선언 포함) */
   log: { name: string; value: number }[];
+  /** trace를 켰을 때만 */
+  trace?: TraceEvent[];
 }
 
 type Value = number | number[];
 
 class Signal {
-  constructor(readonly kind: 'break' | 'continue' | 'return', readonly value = 0) {}
+  constructor(
+    readonly kind: 'break' | 'continue' | 'return',
+    readonly value = 0,
+    /** return 문(추적에서 줄 번호를 찾는다) */
+    readonly node?: object,
+  ) {}
 }
 
 function int(n: number): number {
@@ -52,6 +77,7 @@ export function run(p: Program, opts: RunOptions = {}): RunResult {
   const funcs = new Map<string, Func>(p.funcs.map((f) => [f.name, f]));
   let steps = 0;
   let depth = 0;
+  const trace: TraceEvent[] | undefined = opts.trace ? [] : undefined;
 
   /** 함수 하나의 변수 공간: 블록마다 한 층 */
   class Frame {
@@ -83,6 +109,12 @@ export function run(p: Program, opts: RunOptions = {}): RunResult {
     note(name: string, v: Value) {
       if (this.isMain && watch.has(name) && typeof v === 'number') log.push({ name, value: v });
     }
+    /** 지금 보이는 변수의 복사본(안쪽 블록이 바깥 이름을 가리지 않으므로 그대로 합친다) */
+    snapshot(): Record<string, number | number[]> {
+      const o: Record<string, number | number[]> = {};
+      for (const sc of this.scopes) for (const [k, v] of sc) o[k] = Array.isArray(v) ? v.slice() : v;
+      return o;
+    }
     block<T>(fn: () => T): T {
       this.scopes.push(new Map());
       try {
@@ -92,6 +124,11 @@ export function run(p: Program, opts: RunOptions = {}): RunResult {
       }
     }
   }
+
+  /** 추적 한 단계 남기기(trace가 꺼져 있으면 아무것도 하지 않는다) */
+  const rec = (f: Frame, node: object, extra: { out?: number; note?: string } = {}) => {
+    if (trace) trace.push({ node, vars: f.snapshot(), depth, ...extra });
+  };
 
   const tick = () => {
     if (++steps > maxSteps) throw new EvalError('실행 단계 수 초과');
@@ -170,10 +207,15 @@ export function run(p: Program, opts: RunOptions = {}): RunResult {
     if (++depth > 40) throw new EvalError('재귀 깊이 초과');
     const f = new Frame(false);
     fn.params.forEach((p, i) => f.declare(p, args[i]));
+    const callText = `${name}(${args.join(', ')})`;
+    rec(f, fn, { note: `${callText} 호출` });
     try {
       execBlock(f, fn.body);
     } catch (s) {
-      if (s instanceof Signal && s.kind === 'return') return s.value;
+      if (s instanceof Signal && s.kind === 'return') {
+        rec(f, s.node!, { note: `${callText} = ${s.value} 반환` });
+        return s.value;
+      }
       if (s instanceof Signal) throw new EvalError(`함수 밖으로 나온 ${s.kind}`);
       throw s;
     } finally {
@@ -204,48 +246,62 @@ export function run(p: Program, opts: RunOptions = {}): RunResult {
     tick();
     switch (s.k) {
       case 'decl':
-        return f.declare(s.name, num(f, s.init));
+        f.declare(s.name, num(f, s.init));
+        return rec(f, s);
       case 'arr':
-        return f.declare(s.name, s.values.slice());
+        f.declare(s.name, s.values.slice());
+        return rec(f, s);
       case 'set': {
         const cur = s.op === '=' ? 0 : (f.get(s.name) as number);
-        return f.assign(s.name, apply(s.op, cur, num(f, s.e)));
+        f.assign(s.name, apply(s.op, cur, num(f, s.e)));
+        return rec(f, s);
       }
       case 'setIdx': {
         const a = array(f, s.arr);
         const i = num(f, s.i);
         if (i < 0 || i >= a.length) throw new EvalError(`배열 범위 밖 ${s.arr}[${i}]`);
         a[i] = apply(s.op, a[i], num(f, s.e));
-        return;
+        return rec(f, s);
       }
       case 'inc':
-        return f.assign(s.name, int((f.get(s.name) as number) + s.d));
+        f.assign(s.name, int((f.get(s.name) as number) + s.d));
+        return rec(f, s);
       case 'print': {
         const v = num(f, s.e);
         if (v < 0) throw new EvalError('음수 출력');
         out.push(v);
         if (out.length > maxLines) throw new EvalError('출력 줄 수 초과');
-        return;
+        return rec(f, s, { out: v });
       }
       case 'return':
-        throw new Signal('return', num(f, s.e));
+        throw new Signal('return', num(f, s.e), s);
       case 'break':
+        rec(f, s, { note: 'break → 반복을 끝냄' });
         throw new Signal('break');
       case 'continue':
+        rec(f, s, { note: 'continue → 다음 회차로' });
         throw new Signal('continue');
       case 'if': {
-        for (const b of s.branches)
-          if (truth(f, b.cond)) {
+        for (const b of s.branches) {
+          const t = truth(f, b.cond);
+          rec(f, b, { note: t ? '조건 참' : '조건 거짓' });
+          if (t) {
             execBlock(f, b.body);
             return;
           }
-        if (s.else) execBlock(f, s.else);
+        }
+        if (s.else) {
+          rec(f, s.else, { note: 'else 실행' });
+          execBlock(f, s.else);
+        }
         return;
       }
       case 'while':
         for (;;) {
           tick();
-          if (!truth(f, s.cond)) return;
+          const t = truth(f, s.cond);
+          rec(f, s, { note: t ? '조건 참' : '조건 거짓 → 반복 끝' });
+          if (!t) return;
           try {
             execBlock(f, s.body);
           } catch (sig) {
@@ -262,9 +318,11 @@ export function run(p: Program, opts: RunOptions = {}): RunResult {
         const inRange = (i: number) => (s.cmp === '<' ? i < to : s.cmp === '<=' ? i <= to : s.cmp === '>' ? i > to : i >= to);
         f.block(() => {
           f.declare(s.v, from);
-          for (let i = from; inRange(i); i = int(i + (up ? s.step : -s.step))) {
+          let i = from;
+          for (; inRange(i); i = int(i + (up ? s.step : -s.step))) {
             tick();
             f.assign(s.v, i);
+            rec(f, s, { note: `${s.v} = ${i}` });
             try {
               execBlock(f, s.body);
             } catch (sig) {
@@ -274,6 +332,8 @@ export function run(p: Program, opts: RunOptions = {}): RunResult {
             if (f.get(s.v) !== i) throw new EvalError(`반복 변수 ${s.v}를 본문에서 바꿈`);
             if (num(f, s.to) !== to) throw new EvalError('반복 끝값이 반복 중에 바뀜');
           }
+          // 조건이 거짓이 되어 끝났을 때만(break로 끝나면 위에서 이미 기록)
+          if (!inRange(i)) rec(f, s, { note: `${s.v}의 다음 값(${i})은 범위 밖 → 반복 끝` });
         });
         return;
       }
@@ -281,17 +341,28 @@ export function run(p: Program, opts: RunOptions = {}): RunResult {
         const v = num(f, s.e);
         let start = s.cases.findIndex((c) => c.v === v);
         if (start < 0) {
-          if (s.def) f.block(() => s.def!.forEach((x) => exec(f, x)));
+          if (s.def) {
+            rec(f, s.def, { note: `맞는 case 없음 → default` });
+            f.block(() => s.def!.forEach((x) => exec(f, x)));
+          }
           return;
         }
         // case 안에서는 선언을 쓰지 않으므로(정적 검사) switch 전체를 한 블록으로 본다
         f.block(() => {
+          const first = start;
           for (; start < s.cases.length; start++) {
+            rec(f, s.cases[start], { note: start === first ? `case ${v} 일치` : 'break 없음 → 이어서 실행' });
             s.cases[start].body.forEach((x) => exec(f, x));
-            if (s.cases[start].brk) return;
+            if (s.cases[start].brk) {
+              rec(f, s.cases[start].body, { note: 'break → switch를 나감' });
+              return;
+            }
           }
           // 마지막 case까지 break 없이 내려오면 default도 실행한다(default는 맨 뒤에 둔다)
-          if (s.def) s.def.forEach((x) => exec(f, x));
+          if (s.def) {
+            rec(f, s.def, { note: 'break 없음 → default까지 실행' });
+            s.def.forEach((x) => exec(f, x));
+          }
         });
         return;
       }
@@ -306,7 +377,7 @@ export function run(p: Program, opts: RunOptions = {}): RunResult {
     throw s;
   }
   if (!out.length) throw new EvalError('출력 없음');
-  return { out, log };
+  return trace ? { out, log, trace } : { out, log };
 }
 
 /** 출력 줄을 보기 표시 문자열로(한 줄에 정수 하나) */

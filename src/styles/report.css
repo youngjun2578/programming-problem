@@ -382,3 +382,119 @@
 .print-only {
   display: none;
 }
+
+/* ---------- 해설: 추적표, SQL 단계, 보기별 이유 ---------- */
+.trace {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  margin: var(--s2) 0 var(--s4);
+}
+.trace caption {
+  text-align: left;
+  font-weight: 600;
+  font-size: 14px;
+  padding-bottom: var(--s2);
+}
+.trace th,
+.trace td {
+  padding: var(--s1) var(--s2);
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+  vertical-align: top;
+}
+.trace thead th {
+  border-top: 2px solid var(--ink);
+  background: var(--surface);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.trace td.num {
+  text-align: right;
+  white-space: nowrap;
+}
+.trace td.vars {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.trace td.out {
+  font-weight: 700;
+}
+.trace td.note {
+  white-space: nowrap;
+}
+.trace tr.omitted td {
+  text-align: center;
+  color: var(--muted);
+}
+.trace .depth {
+  color: var(--muted);
+}
+.sql-stages {
+  list-style: none;
+  padding: 0;
+  margin: var(--s2) 0 var(--s4);
+  counter-reset: stage;
+}
+.sql-stages > li {
+  margin-bottom: var(--s4);
+}
+.stage-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s3);
+  align-items: baseline;
+  margin: 0 0 var(--s2);
+}
+.stage-title code {
+  font-weight: 600;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.stage-count {
+  color: var(--muted);
+  font-size: 14px;
+}
+.stage-note {
+  margin: 0 0 var(--s2);
+  padding: var(--s2) var(--s3);
+  background: var(--surface);
+  border-left: 3px solid var(--rule-strong);
+  font-size: 14px;
+}
+.stage-more {
+  margin: var(--s1) 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.choice-reasons {
+  list-style: none;
+  padding: 0;
+  margin: var(--s2) 0 0;
+}
+.choice-reasons li {
+  display: grid;
+  grid-template-columns: minmax(4.5em, auto) 1fr;
+  gap: var(--s1) var(--s3);
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--rule);
+}
+.choice-reasons li.is-answer .cr-why {
+  color: var(--ink);
+}
+.cr-label {
+  font-variant-numeric: tabular-nums;
+}
+.cr-why {
+  color: var(--muted);
+}
+.choice-reasons .mine {
+  display: inline-block;
+  margin-left: var(--s1);
+  padding: 0 var(--s1);
+  font-size: 12px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px;
+}

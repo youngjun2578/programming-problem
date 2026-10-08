@@ -8,6 +8,7 @@ import type { Difficulty, Problem } from './engine/types.js';
 import { analyze, LEVEL_LABEL, type Report } from './report/analyze.js';
 import type { Explanation, PublicChoice, PublicQuestion, ReportResponse } from '../shared/api.js';
 import { FREE_EXPLANATION_COUNT } from '../shared/product.js';
+import { reasonFor } from './engine/reasons.js';
 import type { DiagnosisLevel } from '../shared/api.js';
 import { languageName, type LanguageId } from '../shared/languages.js';
 
@@ -63,7 +64,12 @@ export function score(qs: Problem[], answers: number[], secs: number[], lang: La
 
 const pct = (r: number) => Math.round(r * 100);
 
-function explanation(q: Problem, picked: number): Explanation {
+/** 보기마다 그 값이 나오는 이유(정답은 null). 프로그래밍 문항은 고른 언어의 문구, SQL은 SQL 문구 */
+export function choiceReasons(q: Problem, lang: LanguageId): (string | null)[] {
+  return q.choices.map((c) => (c.mistakeTag === null ? null : reasonFor(c.mistakeTag, q.area === 'sql' ? 'sql' : lang)));
+}
+
+function explanation(q: Problem, picked: number, lang: LanguageId): Explanation {
   const isCorrect = picked === q.answerIndex;
   const e: Explanation = {
     areaName: AREA_BY_ID[q.area].name,
@@ -75,8 +81,10 @@ function explanation(q: Problem, picked: number): Explanation {
     isCorrect,
     pickedMistakeTag: isCorrect ? null : (q.choices[picked]?.mistakeTag ?? null),
     steps: q.steps,
+    choiceReasons: choiceReasons(q, lang),
   };
   if (q.figure) e.figure = q.figure;
+  if (q.detail) e.detail = q.detail;
   return e;
 }
 
@@ -138,6 +146,6 @@ function composeAll(full: FullResult): ReportResponse {
       levelReason: a.levelReason,
       patterns: a.patterns.map((p) => ({ tag: p.tag, count: p.count, text: p.text })),
     })),
-    explanations: qs.map((q, i) => explanation(q, answers[i])),
+    explanations: qs.map((q, i) => explanation(q, answers[i], full.lang)),
   };
 }

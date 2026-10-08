@@ -1,6 +1,6 @@
 import type { PublicQuestion } from '../../shared/api';
 import { renderChart, renderFigure } from '../../shared/charts/render';
-import { CIRC, confirmDialog, fmtClock, prefersReducedMotion } from './dom';
+import { CIRC, confirmDialog, esc, fmtClock, prefersReducedMotion } from './dom';
 
 const ADVANCE_MS = 380;
 
@@ -54,7 +54,7 @@ export function runTest(app: HTMLElement, qs: PublicQuestion[], onDone: (answers
       .map((c, k) => {
         const body = c.chart
           ? `<span class="choice-chart">${renderChart(c.chart, { w: 320, h: 170 })}</span>`
-          : `<span class="choice-text">${c.label}</span>`;
+          : `<span class="choice-text">${esc(c.label)}</span>`;
         const sel = picked[i] === k;
         return `<li><button type="button" class="choice${sel ? ' selected' : ''}" data-k="${k}" aria-pressed="${sel}"><span class="mark" aria-hidden="true">${CIRC[k]}</span><span class="sr-only">${k + 1}번</span>${body}</button></li>`;
       })
@@ -79,7 +79,7 @@ export function runTest(app: HTMLElement, qs: PublicQuestion[], onDone: (answers
     <main class="page test" id="main">
       <section class="question" aria-labelledby="q-text">
         <p class="q-no">문항 ${i + 1}</p>
-        <h1 class="q" id="q-text" tabindex="-1">${q.text}</h1>
+        <h1 class="q" id="q-text" tabindex="-1">${esc(q.text)}</h1>
         ${q.figure ? renderFigure(q.figure) : ''}
       </section>
       <ol class="choices ${isChart ? 'chart-choices' : ''}" aria-label="보기">${choices}</ol>

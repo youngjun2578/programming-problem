@@ -15,6 +15,7 @@ export function makeProblem(tpl: Template, rng: Rng, ctx: GenContext): Problem {
     choices,
     answerIndex,
     steps: g.steps,
+    ...(g.detail ? { detail: g.detail } : {}),
     fillers,
   };
 }

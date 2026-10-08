@@ -10,7 +10,8 @@ import type { MistakeTag } from '../mistakes.js';
 import { languageName } from '../../../shared/languages.js';
 import { clone, type CmpOp, type Expr, type Program, type Stmt } from './model.js';
 import { outputLabel, run } from './eval.js';
-import { renderProgram } from './render.js';
+import { renderProgramLines } from './render.js';
+import { traceOutput, traceView } from './trace.js';
 
 /* ---------- 모델 훑기 ---------- */
 
@@ -154,9 +155,22 @@ export function wrongsFrom(base: Program, ms: ProgramMistake[]): Wrong<string>[]
   const out: Wrong<string>[] = [];
   for (const m of ms) {
     if (!m.prog) continue;
+    const prog = m.prog;
     try {
-      const v = outputLabel(run(m.prog).out);
-      if (v !== want) out.push({ value: v, mistakeTag: m.tag });
+      const v = outputLabel(run(prog).out);
+      // recheck: 실수한 모델을 새로 복사해 다시 실행(검증용)
+      if (v !== want)
+        out.push({
+          value: v,
+          mistakeTag: m.tag,
+          recheck: () => {
+            try {
+              return outputLabel(run(clone(prog)).out);
+            } catch {
+              return null;
+            }
+          },
+        });
     } catch {
       // 변형이 정의된 동작 범위를 벗어나면 오답으로 쓰지 않는다
     }
@@ -210,7 +224,10 @@ export function pickVariant(make: () => ProgramVariant, tries = 40): ProgramVari
 export function programProblem(rng: Rng, ctx: GenContext, base: Program, mistakes: ProgramMistake[], steps: (out: number[]) => string[]): Generated<string> {
   const { out } = run(base);
   const answer = outputLabel(out);
-  const code = renderProgram(base, ctx.lang);
+  const { code, lineOf } = renderProgramLines(base, ctx.lang);
+  // 해설 추적: 같은 모델을 추적을 켜고 한 번 더 실행한다(결과가 같아야 한다, selfCheck)
+  const traced = run(base, { trace: true });
+  const events = traced.trace!;
   const lastLineNear = (k: number) => {
     const v = out[out.length - 1] + k;
     return v >= 0 ? outputLabel([...out.slice(0, -1), v]) : null;
@@ -223,5 +240,13 @@ export function programProblem(rng: Rng, ctx: GenContext, base: Program, mistake
     format: (v) => v,
     figure: { kind: 'code', lang: languageName(ctx.lang), code },
     near: lastLineNear,
+    detail: { trace: traceView(events, lineOf) },
+    /** 검증용: 추적을 켜도 출력이 같은지, 추적의 출력이 정답과 같은지 */
+    selfCheck: () => {
+      const bad: string[] = [];
+      if (outputLabel(traced.out) !== answer) bad.push('추적을 켜고 실행한 출력이 정답과 다름');
+      if (outputLabel(traceOutput(events)) !== answer) bad.push('추적표의 출력이 정답과 다름');
+      return bad;
+    },
   };
 }

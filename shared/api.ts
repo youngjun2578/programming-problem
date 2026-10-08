@@ -2,7 +2,7 @@
  * 브라우저와 서버(api/)가 주고받는 데이터 모양.
  * 타입만 있으므로 브라우저 번들에는 아무것도 들어가지 않는다.
  */
-import type { ChartSpec, Figure } from './charts/types.js';
+import type { ChartSpec, Figure, TableSpec } from './charts/types.js';
 import type { LanguageId } from './languages.js';
 
 export type AreaId = 'programming' | 'sql';
@@ -83,6 +83,47 @@ export interface AreaDetail {
   patterns: PatternView[];
 }
 
+/** 프로그래밍 추적표 한 행: 실행한 줄(코드 줄 번호), 그 뒤의 변수 값, 출력 */
+export interface TraceRow {
+  step: number;
+  line: number;
+  /** 함수 호출 깊이(main = 0) */
+  depth: number;
+  /** 예: "sum = 3, i = 2" */
+  vars: string;
+  /** 이 단계에서 출력한 값(없으면 빈 문자열) */
+  out: string;
+  /** 조건 참·거짓, 반복 끝, 호출·반환 같은 설명(없으면 빈 문자열) */
+  note: string;
+}
+
+/** 추적표. 길면 가운데를 { omitted: 줄인 단계 수 }로 줄인다 */
+export interface TraceView {
+  rows: (TraceRow | { omitted: number })[];
+  /** 줄이기 전 전체 단계 수 */
+  total: number;
+}
+
+/** SQL 처리 단계 하나(FROM/JOIN → WHERE → GROUP BY → HAVING → SELECT) */
+export interface SqlStageView {
+  /** 예: "WHERE salary >= 300" */
+  title: string;
+  /** 이 단계 뒤의 행 수(GROUP BY는 그룹 수) */
+  rowCount: number;
+  /** 중간 결과 표(앞쪽 몇 행만) */
+  table: TableSpec;
+  /** 표에서 줄인 행 수 */
+  more: number;
+  /** NULL 때문에 행이 빠지거나 집계가 달라졌을 때 한 문장 */
+  note?: string;
+}
+
+/** 해설의 단계별 풀이. 프로그래밍은 trace, SQL은 sqlStages */
+export interface ExplainDetail {
+  trace?: TraceView;
+  sqlStages?: SqlStageView[];
+}
+
 /** 문항별 해설 */
 export interface Explanation {
   areaName: string;
@@ -96,6 +137,10 @@ export interface Explanation {
   /** 오답일 때 고른 보기가 나오는 실수 유형 */
   pickedMistakeTag: string | null;
   steps: string[];
+  /** 보기마다 그 값이 나오는 이유(정답 보기는 null) */
+  choiceReasons: (string | null)[];
+  /** 단계별 풀이(추적표 또는 SQL 단계별 중간 결과) */
+  detail?: ExplainDetail;
 }
 
 /**

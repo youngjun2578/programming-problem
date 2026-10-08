@@ -17,6 +17,7 @@ import { MISTAKES } from '../server/engine/mistakes.js';
 import { judge } from '../server/report/analyze.js';
 import { generateQuestions } from '../server/diagnosis.js';
 import { LANGUAGE_IDS } from '../shared/languages.js';
+import { ALL_REASON_TEXTS } from '../server/engine/reasons.js';
 
 const DIST = process.env.DIST ?? 'dist';
 
@@ -57,6 +58,7 @@ for (const [tag, text] of Object.entries(MISTAKES)) {
   add('실수 패턴 설명', text);
 }
 for (const a of AREAS) add('영역 설명', a.description);
+for (const r of ALL_REASON_TEXTS) add('보기 이유 문구', r);
 for (const [rate, avg, target] of [[1, 1, 75], [1, 999, 75], [0.7, 1, 75], [0, 1, 75]] as const) add('수준 판정 사유', judge(rate, avg, target).reason);
 for (const t of TEMPLATES) add('템플릿 id', t.id);
 for (const f of walk('server/templates')) add('템플릿 파일 이름', basename(f));

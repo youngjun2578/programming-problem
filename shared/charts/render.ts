@@ -179,9 +179,16 @@ export function renderTable(t: TableSpec): string {
 
 const NOTE = '<span class="fig-note">연습용 가상 자료</span>';
 
-/** 코드 조각: 공백과 줄 바꿈을 그대로 보여 준다 */
+/**
+ * 코드 조각: 공백과 줄 바꿈을 그대로 보여 주고, 줄마다 번호를 붙인다(해설 추적표의 "실행한 줄"과 같은 번호).
+ * 줄 번호는 화면에서만 보이고(aria-hidden, 선택 안 됨) 가로로 스크롤해도 왼쪽에 붙어 있다.
+ */
 export function renderCode(lang: string, code: string): string {
-  return `<pre class="code-block" data-lang="${esc(lang)}"><code>${esc(code)}</code></pre>`;
+  const lines = code
+    .split('\n')
+    .map((l, i) => `<span class="code-line"><span class="ln" aria-hidden="true">${i + 1}</span><span class="lc">${esc(l) || ' '}</span></span>`)
+    .join('');
+  return `<pre class="code-block" data-lang="${esc(lang)}"><code>${lines}</code></pre>`;
 }
 
 export function renderFigure(f: Figure): string {

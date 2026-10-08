@@ -532,7 +532,7 @@
 }
 .code-block {
   margin: 0;
-  padding: var(--s3);
+  padding: var(--s3) var(--s3) var(--s3) 0;
   overflow-x: auto;
   background: var(--surface);
   border: 1px solid var(--rule);
@@ -542,6 +542,32 @@
   line-height: 1.6;
   white-space: pre;
   tab-size: 4;
+}
+/* 줄마다 번호 + 코드. 번호는 가로 스크롤해도 왼쪽에 붙어 있다 */
+.code-block code {
+  display: block;
+  min-width: max-content;
+}
+.code-line {
+  display: flex;
+}
+.code-line .ln {
+  position: sticky;
+  left: 0;
+  flex: 0 0 auto;
+  width: 2.6em;
+  padding-right: 0.8em;
+  text-align: right;
+  color: var(--muted);
+  background: var(--surface);
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* 표가 넓으면 표 안에서만 가로 스크롤(페이지는 밀리지 않는다) */
+.table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 @media (max-width: 420px) {
   .data-table {
