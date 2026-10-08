@@ -5,7 +5,10 @@
   padding: var(--s6) var(--s4) var(--s7);
 }
 .masthead {
-  border-bottom: 1px solid var(--rule);
+  /* 짙은 남색 띠 + 포인트 색 얇은 선. 띠 안의 글자·버튼 색은 tokens.css의 .masthead 블록이 정한다 */
+  background: var(--masthead-bg);
+  color: var(--ink);
+  border-bottom: 2px solid var(--point-line);
 }
 .masthead-in {
   max-width: var(--page);
@@ -78,7 +81,7 @@
   padding: 0 var(--s3);
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius);
-  background: var(--bg);
+  background: var(--card);
   color: var(--primary);
   font: inherit;
   font-size: 14px;
@@ -218,7 +221,7 @@
   color: var(--on-primary);
 }
 .btn-secondary {
-  background: var(--bg);
+  background: var(--card);
   color: var(--primary);
   border: 1px solid var(--rule-strong);
 }
@@ -278,11 +281,11 @@
   padding: var(--s5);
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius-lg);
-  background: var(--bg);
+  background: var(--card);
   color: var(--ink);
 }
 .confirm::backdrop {
-  background: rgb(10 16 28 / 0.5);
+  background: var(--overlay);
 }
 .confirm-title {
   font-size: 18px;
@@ -391,7 +394,7 @@
   min-height: 52px;
   padding: var(--s3) var(--s4);
   text-align: left;
-  background: var(--bg);
+  background: var(--card);
   border: 1px solid var(--rule);
   border-radius: var(--radius);
   cursor: pointer;
@@ -534,7 +537,7 @@
   margin: 0;
   padding: var(--s3) var(--s3) var(--s3) 0;
   overflow-x: auto;
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--rule);
   border-radius: 6px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
@@ -559,7 +562,7 @@
   padding-right: 0.8em;
   text-align: right;
   color: var(--muted);
-  background: var(--surface);
+  background: var(--card);
   user-select: none;
   -webkit-user-select: none;
 }
@@ -583,9 +586,9 @@
 }
 .code-block {
   background:
-    linear-gradient(to left, var(--surface), var(--surface)) right / 24px 100% no-repeat local,
+    linear-gradient(to left, var(--card), var(--card)) right / 24px 100% no-repeat local,
     radial-gradient(farthest-side at 100% 50%, var(--scroll-shadow), transparent) right / 10px 100% no-repeat scroll,
-    var(--surface);
+    var(--card);
 }
 @media (max-width: 420px) {
   .data-table {

@@ -1,7 +1,24 @@
 /* 랜딩 페이지 */
 .hero {
+  position: relative;
+  isolation: isolate;
   padding: var(--s7) 0 var(--s6);
   border-bottom: 1px solid var(--rule);
+}
+/* 제목 영역에만 옅은 모눈(블루프린트). 글자 뒤에 깔리고 아래로 갈수록 사라진다. 이미지 파일 없이 CSS로 그린다 */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0 calc(var(--s4) * -1);
+  z-index: -1;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: -1px -1px;
+  -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent);
+  mask-image: linear-gradient(to bottom, black 40%, transparent);
+  pointer-events: none;
 }
 .hero .title {
   font-family: var(--serif);

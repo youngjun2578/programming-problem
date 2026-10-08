@@ -34,13 +34,13 @@
   padding: var(--s6) var(--s5) var(--s5);
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius-lg);
-  background: var(--bg);
+  background: var(--card);
   color: var(--ink);
-  box-shadow: 0 12px 40px rgb(10 16 28 / 0.18);
+  box-shadow: 0 12px 40px var(--shadow);
   overflow-y: auto;
 }
 .auth-modal::backdrop {
-  background: rgb(10 16 28 / 0.5);
+  background: var(--overlay);
 }
 .auth-close {
   position: absolute;

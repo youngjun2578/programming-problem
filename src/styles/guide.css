@@ -79,7 +79,7 @@
   border: 1px solid var(--rule);
   border-radius: var(--radius);
   padding: var(--s1);
-  background: var(--bg);
+  background: var(--card);
 }
 .guide-example .ex-mark {
   color: var(--muted);
