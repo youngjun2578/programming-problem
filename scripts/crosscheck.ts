@@ -13,6 +13,8 @@
  *    sqlite3 명령이 없으면 python3에 들어 있는 sqlite3 모듈로 실행한다(같은 SQLite 엔진).
  *  - 실행마다 임시 폴더를 만들고 지우며, 컴파일·실행은 각각 5초 제한.
  *  - 설치되지 않은 도구는 건너뛰고 무엇을 건너뛰었는지 보고한다.
+ *  - 해설도 확인한다: 프로그래밍은 추적표의 마지막 출력이 실제 출력의 마지막 줄과, SQL은 마지막 중간표(SELECT)의 행 수와 행들이
+ *    실제 결과와 같은지(표를 줄이지 않은 경우 행을 순서와 관계없이 비교. ORDER BY가 없으면 행 순서는 정해지지 않는다).
  * 불일치가 있으면 유형·언어·시드·코드·두 결과를 보여 주고 exit 1.
  */
 import { execFile } from 'node:child_process';
@@ -202,12 +204,12 @@ async function main() {
 
   const bad: Bad[] = [];
   const errors: Bad[] = [];
-  const stat = new Map<string, { n: number; bad: number; err: number }>();
+  const stat = new Map<string, { n: number; bad: number; badDetail: number; err: number }>();
   let done = 0;
   const t0 = Date.now();
   await pool(cases, async (c) => {
     const key = `${c.type}|${c.lang}`;
-    const st = stat.get(key) ?? { n: 0, bad: 0, err: 0 };
+    const st = stat.get(key) ?? { n: 0, bad: 0, badDetail: 0, err: 0 };
     stat.set(key, st);
     st.n++;
     const want = c.problem.choices[c.problem.answerIndex].label;
@@ -229,6 +231,14 @@ async function main() {
           st.bad++;
           bad.push({ c, want, got, code: `${setup}\n${fig.code}` });
         }
+        // 해설: 마지막 중간표 = 실제 결과
+        const last = c.problem.detail?.sqlStages?.at(-1);
+        const shown = (last?.table.rows ?? []).map((row) => row.map(String).join('|')).sort();
+        const real = [...r.rows].sort();
+        if (!last || last.rowCount !== r.rows.length || (last.more === 0 && JSON.stringify(shown) !== JSON.stringify(real))) {
+          st.badDetail++;
+          bad.push({ c, want: `해설 마지막 중간표 ${last?.rowCount}행: ${shown.join(' / ')}`, got: `실제 ${r.rows.length}행: ${real.join(' / ')}`, code: `${setup}\n${fig.code}` });
+        }
       } else {
         const r = await RUNNERS[c.lang].run(fig.code, dir);
         if (!r.ok) {
@@ -241,6 +251,12 @@ async function main() {
           st.bad++;
           bad.push({ c, want, got, code: fig.code });
         }
+        // 해설: 추적표의 마지막 출력 = 실제 출력의 마지막 줄
+        const outs = (c.problem.detail?.trace?.rows ?? []).filter((x) => !('omitted' in x) && x.out !== '') as { out: string }[];
+        if (outs.at(-1)?.out !== got.split('\n').at(-1)) {
+          st.badDetail++;
+          bad.push({ c, want: `해설 추적표 마지막 출력 ${outs.at(-1)?.out}`, got: `실제 마지막 줄 ${got.split('\n').at(-1)}`, code: fig.code });
+        }
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -252,7 +268,7 @@ async function main() {
   console.table(
     [...stat].map(([k, v]) => {
       const [type, lang] = k.split('|');
-      return { 유형: type, 언어: lang, 시드: v.n, 불일치: v.bad, '실행 오류': v.err };
+      return { 유형: type, 언어: lang, 시드: v.n, '정답 불일치': v.bad, '해설 불일치': v.badDetail, '실행 오류': v.err };
     }),
   );
   console.log(`건너뛴 도구: ${skipped.length ? skipped.join(', ') : '없음'}`);

@@ -7,6 +7,8 @@
  *   - NaN·Infinity·음수·undefined 같은 비정상 값이 문장/보기/해설/도표에 없는지
  *   - 모든 오답에 mistakeTag가 붙었는지, 근접값 채움 비율이 낮은지
  *   - 문장 틀이 3가지 이상인지
+ *   - 해설: 추적표·SQL 중간표가 정답과 맞는지(selfCheck), 줄 번호가 코드 안인지, 길이 제한, 오답마다 그 언어에 맞는 이유 문구,
+ *     실수를 다시 적용해 계산한 값이 보기 값과 같은지(recheck)
  * 세트 단위: 언어마다 SETS개 세트를 만들어
  *   - 영역별 문항 수, 영역 내 유형 중복 없음, 같은 세트 내 문장 중복 없음
  */
@@ -22,7 +24,11 @@ import { analyze, judge } from '../server/report/analyze.js';
 import { areaQuestionCount, generateQuestions, PER_AREA } from '../server/diagnosis.js';
 import type { DiagnosisLevel } from '../server/levels.js';
 import { availableFor } from '../server/engine/types.js';
-import { LANGUAGE_IDS, LANGUAGES } from '../shared/languages.js';
+import { LANGUAGE_IDS, LANGUAGES, type LanguageId } from '../shared/languages.js';
+import { reasonFor, type ReasonContext } from '../server/engine/reasons.js';
+import { TRACE_MAX_ROWS } from '../server/engine/program/trace.js';
+import { STAGE_MAX_ROWS } from '../server/engine/sql/tables.js';
+import type { MistakeTag } from '../server/engine/mistakes.js';
 
 const PER_TEMPLATE = Number(process.env.PER_TEMPLATE ?? 3000);
 /** 언어·수준 조합(4 × 2)마다 만드는 세트 수 */
@@ -35,6 +41,19 @@ const MAX_FILLER_RATE = 0.25;
 const MIN_PHRASINGS = 3;
 /** 단계별 구현 중에는 비어 있는 영역을 경고로만 처리한다. 모든 영역이 갖춰지면 true. */
 const STRICT_COVERAGE = true;
+
+/** 이유 문구에 나오면 안 되는 다른 언어의 문법(그 언어에 없는 것) */
+const FOREIGN: Record<'c' | 'python' | 'sql', string[]> = {
+  c: ['elif', ' and ', ' or ', 'range', '들여쓰기', 'NULL', 'WHERE', 'JOIN'],
+  python: ['&&', '||', '++', '{', '}', 'switch', 'else if', '중괄호', 'NULL', 'WHERE', 'JOIN'],
+  sql: ['&&', '||', 'elif', 'range', 'switch', '중괄호', '들여쓰기'],
+};
+const reasonGroup = (ctx: ReasonContext) => (ctx === 'sql' ? 'sql' : ctx === 'python' ? 'python' : 'c');
+/** 해설 통계: 다시 계산한 오답 수 / 값을 바로 계산한 오답 수(recheck 없음) */
+let rechecked = 0;
+let directWrongs = 0;
+let tracedProblems = 0;
+let stagedProblems = 0;
 
 const errors: string[] = [];
 const fail = (msg: string) => {
@@ -112,6 +131,52 @@ for (const tpl of TEMPLATES) {
     for (const s of g.steps) if (hasBadToken(s)) fail(`${id}: 해설에 비정상 값: ${s}`);
     if (g.steps.length === 0) fail(`${id}: 해설 없음`);
     if (g.figure) checkFigure(id, g.figure);
+
+    // 해설: 단계별 풀이가 정답과 맞는지
+    for (const msg of g.selfCheck?.() ?? ['selfCheck 없음']) fail(`${id}: 해설 ${msg}`);
+    const ctx: ReasonContext = tpl.area === 'sql' ? 'sql' : (lang as LanguageId);
+    if (tpl.area === 'programming') {
+      const t = g.detail?.trace;
+      const codeLines = g.figure?.kind === 'code' ? g.figure.code.split('\n').length : 0;
+      if (!t) fail(`${id}: 추적표 없음`);
+      else {
+        tracedProblems++;
+        if (t.rows.length > TRACE_MAX_ROWS) fail(`${id}: 추적표 ${t.rows.length}행 > ${TRACE_MAX_ROWS}`);
+        for (const r of t.rows) if (!('omitted' in r) && (r.line < 1 || r.line > codeLines)) fail(`${id}: 추적 줄 번호 ${r.line}이 코드(${codeLines}줄) 밖`);
+        const outs = t.rows.filter((r): r is Exclude<typeof r, { omitted: number }> => !('omitted' in r) && r.out !== '');
+        const lastLine = String(g.answer).split('\n').at(-1);
+        if (outs.at(-1)?.out !== lastLine) fail(`${id}: 추적표의 마지막 출력(${outs.at(-1)?.out})이 정답 마지막 줄(${lastLine})과 다름`);
+      }
+    } else {
+      const st = g.detail?.sqlStages;
+      if (!st?.length) fail(`${id}: SQL 중간표 없음`);
+      else {
+        stagedProblems++;
+        for (const x of st) {
+          if (x.table.rows.length > STAGE_MAX_ROWS) fail(`${id}: 중간표 ${x.table.rows.length}행 > ${STAGE_MAX_ROWS}`);
+          if (x.table.rows.length + x.more !== x.rowCount) fail(`${id}: 중간표 행 수 불일치 (${x.title})`);
+        }
+      }
+    }
+    // 오답마다 이유 문구(그 언어에 맞는 말)와, 실수를 다시 적용해 계산한 값
+    const reasonOk = (tag: MistakeTag) => {
+      try {
+        const r = reasonFor(tag, ctx);
+        const bad = FOREIGN[reasonGroup(ctx)].filter((w) => r.includes(w));
+        if (bad.length) fail(`${id}: "${tag}" 이유 문구에 ${ctx}에 없는 표현 ${bad.join(', ')}`);
+      } catch (e) {
+        fail(`${id}: ${(e as Error).message}`);
+      }
+    };
+    for (const w of g.wrongs) {
+      reasonOk(w.mistakeTag);
+      if (w.recheck) {
+        rechecked++;
+        const again = w.recheck();
+        if (again === null || g.format(again) !== g.format(w.value)) fail(`${id}: "${w.mistakeTag}" 실수를 다시 적용한 값(${again})이 보기 값(${w.value})과 다름`);
+      } else directWrongs++;
+    }
+    reasonOk('계산 실수');
 
     let built;
     try {
@@ -253,4 +318,5 @@ if (errors.length) {
   for (const e of errors) console.error(' - ' + e);
   process.exit(1);
 }
+console.log(`해설 검사: 추적표 ${tracedProblems}문항, SQL 중간표 ${stagedProblems}문항, 실수를 다시 적용해 확인한 오답 ${rechecked}개, 값을 바로 계산한 오답 ${directWrongs}개(표 전체 행 수 등)`);
 console.log(`\n검증 통과: 템플릿 ${TEMPLATES.length}개, 세트 ${SETS}개 (실패 세트 ${setFail}), ${((Date.now() - t0) / 1000).toFixed(1)}초`);

@@ -340,7 +340,16 @@ async function main() {
           const rj = JSON.parse(repRaw) as ReportResponse;
           ok(rep.status === 200 && rj.meta.language.id === lang && rj.meta.language.name === languageName(lang) && rj.meta.correct === QUESTION_COUNT, `언어 ${lang}: 리포트 meta.language = ${lang}, 본문의 lang은 무시하고 토큰 언어로 채점`);
           const repLeak = others.filter((m) => repRaw.includes(m));
-          ok(!repLeak.length, `언어 ${lang}: 리포트에 다른 언어 코드 없음 (${repLeak.join(', ') || '없음'})`);
+          ok(!repLeak.length, `언어 ${lang}: 리포트(해설 포함)에 다른 언어 코드 없음 (${repLeak.join(', ') || '없음'})`);
+          // 해설: 프로그래밍은 추적표, SQL은 처리 단계별 중간표. 보기 이유 문구는 고른 언어의 문법만
+          const progEx = rj.explanations.filter((e) => e.areaName === '프로그래밍');
+          const sqlEx = rj.explanations.filter((e) => e.areaName === 'SQL');
+          ok(progEx.length > 0 && progEx.every((e) => e.detail?.trace && !e.detail.sqlStages), `언어 ${lang}: 프로그래밍 해설에 추적표 (${progEx.length}문항)`);
+          ok(sqlEx.every((e) => e.detail?.sqlStages?.length && !e.detail.trace), `언어 ${lang}: SQL 해설에 중간표 (${sqlEx.length}문항)`);
+          const foreignWords = lang === 'python' ? ['&&', '||', 'else if', '중괄호', 'switch'] : ['elif', ' and ', ' or ', 'range', '들여쓰기'];
+          const badReason = progEx.flatMap((e) => e.choiceReasons).filter((r): r is string => r !== null && foreignWords.some((w) => r.includes(w)));
+          ok(!badReason.length, `언어 ${lang}: 보기 이유 문구에 다른 언어 문법 없음 (${badReason[0] ?? '없음'})`);
+          ok(rj.explanations.every((e) => e.choiceReasons.length === e.choices.length && e.choiceReasons.filter((r) => r === null).length === 1 && e.choiceReasons[e.answerIndex] === null), `언어 ${lang}: 보기마다 이유(정답만 null)`);
         }
       }
     }

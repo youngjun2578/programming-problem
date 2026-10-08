@@ -88,7 +88,11 @@ function lockedNeedles(sess: Awaited<ReturnType<typeof newSession>>) {
   [[1, 1, 75], [1, 999, 75], [0.7, 1, 75], [0, 1, 75]].forEach(([r, s, t]) => needles.push(judge(r, s, t).reason));
   Object.values(MISTAKES).forEach((t) => needles.push(t));
   full.areaDetails.forEach((d) => needles.push(...d.patterns.map((p) => p.text), d.levelReason, d.description));
-  return { full, needles: [...new Set(needles)].filter((n) => n.length >= 6) };
+  // 3번 이후 해설의 단계별 풀이(추적표·SQL 중간표) 전체. 응답 본문에 같은 JSON이 있으면 샌 것이다
+  sess.qs.slice(2).forEach((q) => q.detail && needles.push(JSON.stringify(q.detail)));
+  // 무료 범위(1·2번 해설)에 똑같이 들어 있는 문구는 잠긴 내용이 아니므로 뺀다(같은 문장 틀이 여러 문항에 나올 수 있다)
+  const freeText = JSON.stringify(full.explanations.slice(0, 2));
+  return { full, needles: [...new Set(needles)].filter((n) => n.length >= 6 && !freeText.includes(n)) };
 }
 
 function checkFree(tag: string, r: Awaited<ReturnType<typeof report>>, sess: Awaited<ReturnType<typeof newSession>>) {
