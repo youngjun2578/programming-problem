@@ -208,9 +208,7 @@ function head(o: { title: string; description: string; path: string; type: strin
 <title>${esc(o.title)}</title>
 <meta name="description" content="${esc(o.description)}">
 ${o.noindex ? '<meta name="robots" content="noindex">' : `<link rel="canonical" href="%VITE_SITE_URL%${o.path}">`}
-<meta name="theme-color" content="#1b2f55" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0f1623" media="(prefers-color-scheme: dark)">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<!--#head-icons-->
 <meta property="og:type" content="${o.type}">
 <meta property="og:locale" content="ko_KR">
 <meta property="og:site_name" content="${SITE}">

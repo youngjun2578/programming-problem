@@ -72,7 +72,7 @@ export function adsenseMeta(value: string | undefined): string {
   return `<meta name="google-adsense-account" content="${value}">`;
 }
 
-/** 정적 HTML에 공통 머리말·꼬리말을 끼워 넣는다: <!--#masthead-->, <!--#footer-->. 애드센스 확인 meta가 있으면 </head> 앞에 한 번 넣는다. */
+/** 정적 HTML에 공통 조각을 끼워 넣는다: <!--#head-icons-->(사이트 아이콘·theme-color, 빠지면 빌드 실패), <!--#masthead-->, <!--#footer-->. 애드센스 확인 meta가 있으면 </head> 앞에 한 번 넣는다. */
 function partials(flags: BuildFlags, guides: () => GuideBuild, headMeta = ''): Plugin {
   return {
     name: 'html-partials',
@@ -80,9 +80,16 @@ function partials(flags: BuildFlags, guides: () => GuideBuild, headMeta = ''): P
       order: 'pre',
       handler: (html) => {
         const visible = guides().visible;
+        if (!html.includes('<!--#head-icons-->')) throw new Error('페이지 head에 <!--#head-icons--> 자리가 없습니다(사이트 아이콘·theme-color)');
         const out = siteValues(
           guideList(
-            guideLinks(applyBuildFlags(html.replace('<!--#masthead-->', partial('masthead')).replace('<!--#footer-->', partial('footer')), flags), visible.length > 0),
+            guideLinks(
+              applyBuildFlags(
+                html.replace('<!--#head-icons-->', partial('head-icons').trimEnd()).replace('<!--#masthead-->', partial('masthead')).replace('<!--#footer-->', partial('footer')),
+                flags,
+              ),
+              visible.length > 0,
+            ),
             visible,
           ),
         );

@@ -35,19 +35,12 @@
   min-height: 44px;
 }
 .brand-mark {
-  width: 20px;
-  height: 20px;
-  border: 2px solid var(--primary);
-  border-radius: 2px;
-  position: relative;
-}
-.brand-mark::after {
-  content: '';
-  position: absolute;
-  inset: 4px 4px auto 4px;
-  height: 2px;
-  background: var(--primary);
-  box-shadow: 0 4px 0 var(--primary), 0 8px 0 var(--accent);
+  /* 사이트 아이콘(public/favicon.svg)을 그대로 쓴다. 띠와 같은 남색이라 테두리로 모양을 드러낸다 */
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px var(--rule-strong);
 }
 .nav {
   display: flex;

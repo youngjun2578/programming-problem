@@ -7,6 +7,7 @@
  *  - 내부 링크(/로 시작) 모두 dist에 있는지, 관련 글 링크가 발행 글만 가리키고 서로 링크하는지
  *  - 발행 글이 있을 때만 메인 하단·꼬리말에 /guide/ 링크
  *  - title·description 중복 없음
+ *  - dist의 모든 HTML 페이지에 사이트 아이콘(favicon.svg, apple-touch-icon)과 라이트·다크 theme-color가 있는지(가이드 페이지 포함)
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -100,6 +101,21 @@ for (const f of walk(DIST).filter((f) => f.endsWith('.html'))) {
   }
 }
 
+// 모든 페이지 head에 사이트 아이콘·theme-color(src/partials/head-icons.html)
+const HEAD_ICONS = [
+  '<link rel="icon" href="/favicon.svg" type="image/svg+xml">',
+  '<link rel="apple-touch-icon" href="/apple-touch-icon.png">',
+  'name="theme-color" content="#0b1f3a" media="(prefers-color-scheme: light)"',
+  'name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)"',
+];
+let iconPages = 0;
+for (const f of walk(DIST).filter((f) => f.endsWith('.html'))) {
+  const head = readFileSync(f, 'utf8').split('</head>')[0];
+  iconPages++;
+  for (const tag of HEAD_ICONS) if (!head.includes(tag)) bad(`${f}: head에 ${tag} 없음`);
+}
+for (const asset of ['favicon.svg', 'apple-touch-icon.png']) if (!existsSync(join(DIST, asset))) bad(`dist에 ${asset} 없음`);
+
 // 관련 글은 서로 링크해야 한다(발행 글끼리)
 for (const g of pub)
   for (const r of g.related) {
@@ -112,4 +128,4 @@ if (problems.length) {
   problems.forEach((p) => console.error(' - ' + p));
   process.exit(1);
 }
-console.log(`가이드 dist 점검 통과: 발행 ${pub.length}편, 초안 ${draft.length}편, 내부 링크 ${links}개 확인`);
+console.log(`가이드 dist 점검 통과: 발행 ${pub.length}편, 초안 ${draft.length}편, 내부 링크 ${links}개 확인, 아이콘·theme-color ${iconPages}개 페이지`);
